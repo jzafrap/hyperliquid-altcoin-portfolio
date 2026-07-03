@@ -1,9 +1,12 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearAgent,
   generateAgent,
+  getAgentExchangeClient,
   getAgentSession,
+  getSnapshot,
   isAgentApprovedFor,
+  subscribe,
 } from "./agent";
 
 const MASTER_A = "0x1111111111111111111111111111111111111111" as const;
@@ -46,5 +49,49 @@ describe("agent session state machine", () => {
     const a = generateAgent(MASTER_A).agentAddress;
     const b = generateAgent(MASTER_A).agentAddress;
     expect(a).not.toBe(b);
+  });
+});
+
+describe("reactive snapshot", () => {
+  beforeEach(() => clearAgent());
+
+  it("reports not-approved for a freshly generated (unapproved) agent", () => {
+    generateAgent(MASTER_A);
+    expect(getSnapshot().approved).toBe(false);
+  });
+
+  it("returns a referentially stable snapshot when unchanged", () => {
+    const first = getSnapshot();
+    expect(getSnapshot()).toBe(first);
+  });
+
+  it("notifies subscribers on generate and clear", () => {
+    const listener = vi.fn();
+    const unsub = subscribe(listener);
+    generateAgent(MASTER_A);
+    clearAgent();
+    expect(listener).toHaveBeenCalledTimes(2);
+    unsub();
+    generateAgent(MASTER_A);
+    expect(listener).toHaveBeenCalledTimes(2); // no calls after unsubscribe
+  });
+});
+
+describe("getAgentExchangeClient (trust boundary)", () => {
+  beforeEach(() => clearAgent());
+
+  it("throws when there is no session", () => {
+    expect(() => getAgentExchangeClient(MASTER_A)).toThrow(/no approved agent/i);
+  });
+
+  it("throws for an unapproved session even if the master matches", () => {
+    generateAgent(MASTER_A);
+    expect(() => getAgentExchangeClient(MASTER_A)).toThrow(/no approved agent/i);
+  });
+
+  it("throws for a different master than the approved one", () => {
+    const s = generateAgent(MASTER_A);
+    s.approvedAt = Date.now(); // simulate approval for A
+    expect(() => getAgentExchangeClient(MASTER_B)).toThrow(/no approved agent/i);
   });
 });
