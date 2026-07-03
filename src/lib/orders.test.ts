@@ -29,6 +29,14 @@ describe("roundSize", () => {
     expect(roundSize(0, 2)).toBe(0);
     expect(roundSize(-1, 2)).toBe(0);
   });
+  it("does not truncate already-aligned values via float error", () => {
+    // 0.58*100 = 57.99999999999999 — must stay 0.58, not 0.57.
+    expect(roundSize(0.58, 2)).toBe(0.58);
+    expect(roundSize(0.0029, 4)).toBe(0.0029);
+    expect(roundSize(2.5, 2)).toBe(2.5);
+    // genuine extra precision is still floored down
+    expect(roundSize(0.579999, 2)).toBe(0.57);
+  });
 });
 
 describe("toDecimalString", () => {

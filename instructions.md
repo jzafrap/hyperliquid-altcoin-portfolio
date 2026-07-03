@@ -284,6 +284,18 @@ lot and never touches another lot**, even if both belong to the same tokenset.
   drift in order sizing.
 - Read-only by default: only sign when the user explicitly triggers buy/sell.
 
+### 8.1 Known v1 limitations (serverless bookkeeping)
+
+- **Cross-tab lot writes are not atomic.** Lot persistence is a localStorage
+  read-modify-write. Within a single tab it is race-free (synchronous after a
+  fill) and tabs re-sync on the `storage` event, but two tabs trading the **same
+  wallet at the same instant** can lose one update's bookkeeping (the on-exchange
+  fills remain correct — only local P&L/remaining-qty diverges). Planned fix: a
+  cross-tab lock (`navigator.locks`) with re-read/merge inside the lock.
+- **Corrupt/unreadable storage reads as empty.** `loadLots` returns `[]` on a
+  parse error, which looks like "no positions". Acceptable for v1; a future
+  version should distinguish and warn.
+
 ---
 
 ## 9. Build roadmap (suggested slices)

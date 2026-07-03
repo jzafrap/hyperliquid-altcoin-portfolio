@@ -18,8 +18,10 @@ export interface BuyLeg {
   qtyBought: number;
   /** Average entry price (USDC per token) from fills; 0 if unfilled. */
   avgEntryPrice: number;
-  /** Remaining size not yet sold (decreases on partial sells, slice 6). */
+  /** Remaining size not yet sold (decreases on partial sells). */
   qtyRemaining: number;
+  /** Cumulative realized P&L (USDC) from sells of this leg. */
+  realizedPnlUsd?: number;
   /** Present when this leg failed to place/fill. */
   error?: string;
 }
@@ -147,4 +149,51 @@ export function saveLots(wallet: string, lots: BuyRecord[]): void {
 
 export function addLot(lots: BuyRecord[], lot: BuyRecord): BuyRecord[] {
   return [lot, ...lots];
+}
+
+/** Replace a lot in place by id (used after a sell updates it). */
+export function replaceLot(lots: BuyRecord[], updated: BuyRecord): BuyRecord[] {
+  return lots.map((l) => (l.id === updated.id ? updated : l));
+}
+
+const DUST_EPSILON = 1e-9;
+
+/** A confirmed sell fill for one leg. */
+export interface SellFill {
+  token: string;
+  soldQty: number;
+  avgPx: number;
+}
+
+/**
+ * Apply sell fills to a lot: reduce each sold leg's qtyRemaining, accrue realized
+ * P&L (soldQty × (sellPrice − avgEntryPrice)), and recompute lot status. Pure —
+ * returns a new lot plus the realized P&L of this sell. Legs not in `fills` are
+ * untouched (only the targeted lot's sold legs change).
+ */
+export function applySellFills(
+  lot: BuyRecord,
+  fills: SellFill[],
+): { lot: BuyRecord; realizedPnlUsd: number } {
+  const byToken = new Map(fills.map((f) => [f.token, f]));
+  let realizedPnlUsd = 0;
+
+  const legs = lot.legs.map((leg) => {
+    const fill = byToken.get(leg.token);
+    if (!fill || fill.soldQty <= 0) return leg;
+    const pnl = fill.soldQty * (fill.avgPx - leg.avgEntryPrice);
+    realizedPnlUsd += pnl;
+    return {
+      ...leg,
+      qtyRemaining: Math.max(0, leg.qtyRemaining - fill.soldQty),
+      realizedPnlUsd: (leg.realizedPnlUsd ?? 0) + pnl,
+    };
+  });
+
+  // Status: closed if nothing remains across all originally-bought legs;
+  // partially_sold if some remains but at least one sell has happened.
+  const anyRemaining = legs.some((l) => l.qtyRemaining > DUST_EPSILON);
+  const status: LotStatus = anyRemaining ? "partially_sold" : "closed";
+
+  return { lot: { ...lot, legs, status }, realizedPnlUsd };
 }
