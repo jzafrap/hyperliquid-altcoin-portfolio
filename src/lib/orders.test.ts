@@ -5,8 +5,8 @@ import {
   minTotalFor,
   planBuy,
   roundSize,
-  roundSpotPrice,
   spotAssetId,
+  toDecimalString,
   type BuyMarketInput,
 } from "./orders";
 
@@ -31,14 +31,15 @@ describe("roundSize", () => {
   });
 });
 
-describe("roundSpotPrice", () => {
-  it("limits to 5 significant figures", () => {
-    expect(roundSpotPrice(123456, 0)).toBe(123460);
-    expect(roundSpotPrice(1.23456, 2)).toBe(1.2346);
+describe("toDecimalString", () => {
+  it("never uses exponential notation for tiny values", () => {
+    expect(toDecimalString(5.1e-7, 8)).toBe("0.00000051");
+    expect(toDecimalString(0.0000005, 8)).toBe("0.0000005");
   });
-  it("limits decimals to 8 - szDecimals", () => {
-    // szDecimals 6 -> max 2 decimals
-    expect(roundSpotPrice(1.23456, 6)).toBe(1.23);
+  it("trims trailing zeros but keeps integer digits", () => {
+    expect(toDecimalString(10.2, 4)).toBe("10.2");
+    expect(toDecimalString(100, 0)).toBe("100");
+    expect(toDecimalString(5, 2)).toBe("5");
   });
 });
 
@@ -46,6 +47,12 @@ describe("marketablePrice", () => {
   it("prices above mid for buys, below for sells", () => {
     expect(marketablePrice(100, true, 2, 0.02)).toBeCloseTo(102);
     expect(marketablePrice(100, false, 2, 0.02)).toBeCloseTo(98);
+  });
+  it("stays strictly marketable even with a coarse decimal cap (buy > mid)", () => {
+    // mid 0.012345, szDecimals 6 -> max 2 decimals; nearest rounding would give
+    // 0.01 (below mid) — ceil keeps the buy marketable.
+    const px = marketablePrice(0.012345, true, 6, 0.02);
+    expect(px).toBeGreaterThan(0.012345);
   });
 });
 
@@ -66,14 +73,15 @@ const market = (over: Partial<BuyMarketInput> = {}): BuyMarketInput => ({
 });
 
 describe("planBuy", () => {
-  it("splits equally across tokens", () => {
+  it("splits equally and sizes off the limit price (never overspends)", () => {
     const plan = planBuy([market({ tokenName: "A" }), market({ tokenName: "B" })], 100);
     expect(plan.ok).toBe(true);
     expect(plan.legs).toHaveLength(2);
     expect(plan.legs[0].allocationUsd).toBe(50);
-    // 50 / 10 = 5 units
-    expect(plan.legs[0].size).toBe(5);
-    expect(plan.legs[0].notionalUsd).toBeCloseTo(50);
+    // Sized off limit (mid*1.02=10.2): floor(50/10.2, 2dp) = 4.90 units.
+    expect(plan.legs[0].size).toBe(4.9);
+    // Worst-case spend must not exceed the allocation.
+    expect(plan.legs[0].maxNotionalUsd).toBeLessThanOrEqual(50);
   });
 
   it("rejects a total below the minimum (min × n)", () => {
@@ -110,15 +118,16 @@ describe("planBuy", () => {
 });
 
 describe("buildBuyOrders", () => {
-  it("builds IOC buy orders with correct asset id and marketable price", () => {
+  it("builds IOC buy orders with correct asset id, decimal-string price and size", () => {
     const plan = planBuy([market({ universeIndex: 5, midPx: 10, szDecimals: 2 })], 50);
-    const orders = buildBuyOrders(plan, 0.02);
+    const orders = buildBuyOrders(plan);
     expect(orders).toHaveLength(1);
     expect(orders[0].a).toBe(10005);
     expect(orders[0].b).toBe(true);
     expect(orders[0].r).toBe(false);
     expect(orders[0].t).toEqual({ limit: { tif: "Ioc" } });
-    expect(Number(orders[0].p)).toBeCloseTo(10.2);
-    expect(orders[0].s).toBe("5");
+    expect(orders[0].p).toBe("10.2"); // mid*1.02, plain decimal string
+    expect(orders[0].s).toBe("4.9"); // floor(50/10.2, 2dp)
+    expect(orders[0].p).not.toMatch(/e/i); // never exponential
   });
 });

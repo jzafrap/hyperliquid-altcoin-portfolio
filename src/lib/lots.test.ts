@@ -16,6 +16,7 @@ const plan: BuyPlan = {
   usdcTotal: 100,
   plannedUsd: 100,
   minTotal: 20,
+  slippage: 0.02,
   ok: true,
   errors: [],
   legs: [
@@ -25,9 +26,10 @@ const plan: BuyPlan = {
       assetId: 10001,
       szDecimals: 2,
       allocationUsd: 50,
-      price: 10,
+      mid: 10,
+      limitPrice: 10.2,
       size: 5,
-      notionalUsd: 50,
+      maxNotionalUsd: 51,
     },
     {
       tokenName: "B",
@@ -35,9 +37,10 @@ const plan: BuyPlan = {
       assetId: 10002,
       szDecimals: 2,
       allocationUsd: 50,
-      price: 20,
+      mid: 20,
+      limitPrice: 20.4,
       size: 2.5,
-      notionalUsd: 50,
+      maxNotionalUsd: 51,
     },
   ],
 };

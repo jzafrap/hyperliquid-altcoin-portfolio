@@ -43,6 +43,7 @@ export function BuyForm({
   }
 
   const handleBuy = async () => {
+    if (busy) return; // reentrancy guard (defense beyond the disabled attribute)
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -54,11 +55,19 @@ export function BuyForm({
         markets: resolved,
         usdcTotal: usdc,
       });
-      setMessage(
-        `Bought — spent ${formatUsd(res.record.usdcSpent)}${
-          res.partial ? " (partial basket — some legs did not fill)" : ""
-        }`,
-      );
+      if (!res.persisted) {
+        // Order filled but the lot could not be saved — warn loudly, do NOT retry.
+        setError(
+          `Order FILLED (${formatUsd(res.record.usdcSpent)}) but could not be saved locally. ` +
+            `Record this position manually — do NOT buy again.`,
+        );
+      } else {
+        setMessage(
+          `Bought — spent ${formatUsd(res.record.usdcSpent)}${
+            res.partial ? " (partial basket — some legs did not fully fill)" : ""
+          }`,
+        );
+      }
       setAmount("");
       onBought();
     } catch (e) {

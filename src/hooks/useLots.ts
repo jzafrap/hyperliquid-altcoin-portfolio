@@ -15,6 +15,11 @@ export function useLots(wallet: Address | undefined) {
 
   useEffect(() => {
     refresh();
+    // Keep other tabs in sync so a buy/sell elsewhere is reflected here, reducing
+    // the window for a cross-tab read-modify-write divergence on lots storage.
+    const onStorage = () => refresh();
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, [refresh]);
 
   return { lots, refresh };

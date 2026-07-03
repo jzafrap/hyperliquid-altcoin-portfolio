@@ -137,12 +137,12 @@ export function loadLots(wallet: string): BuyRecord[] {
   }
 }
 
+/**
+ * Persist lots. Throws on failure (quota/unavailable) — the caller MUST surface
+ * this, because a filled buy whose lot is not saved becomes untracked money.
+ */
 export function saveLots(wallet: string, lots: BuyRecord[]): void {
-  try {
-    localStorage.setItem(storageKey(wallet), JSON.stringify(lots));
-  } catch {
-    // Ignore quota / unavailable storage.
-  }
+  localStorage.setItem(storageKey(wallet), JSON.stringify(lots));
 }
 
 export function addLot(lots: BuyRecord[], lot: BuyRecord): BuyRecord[] {
