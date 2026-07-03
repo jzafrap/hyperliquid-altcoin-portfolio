@@ -141,7 +141,178 @@ button:disabled {
   color: var(--muted);
 }
 
+.small {
+  font-size: 0.8rem;
+}
+
 .error {
   color: var(--danger);
   font-size: 0.85rem;
+}
+
+/* Compose layout */
+.compose {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+@media (max-width: 720px) {
+  .compose {
+    grid-template-columns: 1fr;
+  }
+}
+
+.compose-col {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+}
+
+.compose-col h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+/* Token picker */
+.token-search {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.token-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 460px;
+  overflow-y: auto;
+}
+
+.token-row {
+  display: grid;
+  grid-template-columns: 1.2rem 1fr auto auto auto auto;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.token-row:hover {
+  background: #1d232c;
+}
+
+.token-row.selected {
+  border-color: var(--accent);
+  background: #14241a;
+}
+
+.token-check {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.token-row.selected .token-check {
+  color: var(--accent);
+}
+
+.token-name {
+  font-weight: 600;
+}
+
+.token-price {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.token-change.up {
+  color: var(--accent);
+}
+
+.token-change.down {
+  color: var(--danger);
+}
+
+.token-vol {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Liquidity badge */
+.liq-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.liq-high {
+  color: #06210f;
+  background: var(--accent);
+}
+
+.liq-medium {
+  color: #2a1e05;
+  background: #fbbf4d;
+}
+
+.liq-low {
+  color: #2a0b0b;
+  background: var(--danger);
+}
+
+.liq-warn {
+  font-weight: 700;
+}
+
+/* Selected basket */
+.basket-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.basket-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+}
+
+.basket-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+}
+
+.liq-detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+button.ghost {
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.9rem;
 }
