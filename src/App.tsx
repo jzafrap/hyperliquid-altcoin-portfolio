@@ -3,9 +3,12 @@ import { useAccount } from "wagmi";
 import { NetworkBanner } from "./components/NetworkBanner";
 import { SelectedBasket } from "./components/SelectedBasket";
 import { TokenPicker } from "./components/TokenPicker";
+import { TokensetList } from "./components/TokensetList";
 import { WalletConnect } from "./components/WalletConnect";
+import { useTokensets } from "./hooks/useTokensets";
 import { useUsdcBalance } from "./hooks/useUsdcBalance";
 import type { SpotMarket } from "./lib/markets";
+import type { NewTokenset } from "./lib/tokensets";
 
 function UsdcBalance() {
   const { address } = useAccount();
@@ -30,10 +33,15 @@ function UsdcBalance() {
   );
 }
 
-function ComposeTokenset() {
-  // Selected markets keyed by token symbol. Local for now; tokenset persistence
-  // is slice 3 (§6.3). Keeping the full market object avoids a second lookup.
+function ComposeTokenset({
+  onCreate,
+}: {
+  onCreate: (input: NewTokenset) => void;
+}) {
+  // Selected markets keyed by token symbol; local to the compose step.
   const [selected, setSelected] = useState<Map<string, SpotMarket>>(new Map());
+  const [name, setName] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   const toggle = useCallback((market: SpotMarket) => {
     setSelected((prev) => {
@@ -44,25 +52,54 @@ function ComposeTokenset() {
     });
   }, []);
 
-  const selectedNames = new Set(selected.keys());
   const selectedMarkets = [...selected.values()];
+
+  const handleCreate = () => {
+    setError(null);
+    try {
+      onCreate({ name, tokens: selectedMarkets.map((m) => m.tokenName) });
+      setSelected(new Map());
+      setName("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const canCreate = name.trim().length > 0 && selectedMarkets.length > 0;
 
   return (
     <section className="compose">
       <div className="compose-col">
         <h2>Tokens</h2>
-        <TokenPicker selected={selectedNames} onToggle={toggle} />
+        <TokenPicker selected={new Set(selected.keys())} onToggle={toggle} />
       </div>
       <div className="compose-col">
         <h2>New tokenset</h2>
+        <input
+          className="token-search"
+          type="text"
+          placeholder="Name this tokenset (e.g. tokenset1)"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
         <SelectedBasket markets={selectedMarkets} onRemove={toggle} />
+        {error && <p className="error">{error}</p>}
+        <button
+          type="button"
+          className="create-btn"
+          disabled={!canCreate}
+          onClick={handleCreate}
+        >
+          Create tokenset
+        </button>
       </div>
     </section>
   );
 }
 
 export default function App() {
-  const { isConnected } = useAccount();
+  const { address, isConnected } = useAccount();
+  const { tokensets, create, remove } = useTokensets(address);
 
   return (
     <div className="app">
@@ -80,7 +117,13 @@ export default function App() {
             <section className="panel">
               <UsdcBalance />
             </section>
-            <ComposeTokenset />
+
+            <ComposeTokenset onCreate={create} />
+
+            <section className="panel">
+              <h2>Your tokensets</h2>
+              <TokensetList tokensets={tokensets} onDelete={remove} />
+            </section>
           </>
         ) : (
           <section className="panel empty-state">
