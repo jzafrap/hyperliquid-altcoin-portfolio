@@ -1,16 +1,26 @@
+import type { Address } from "viem";
+import type { SpotMarket } from "../lib/markets";
 import type { Tokenset } from "../lib/tokensets";
+import { BuyForm } from "./BuyForm";
 
 /**
- * List of the wallet's saved tokensets (instructions.md §6.5, initial view).
- * P&L and open lots are added in later slices; for now this shows the basket
- * definition and lets the user delete a set.
+ * List of the wallet's saved tokensets with a buy control per set (§6.3).
+ * P&L and open lots are shown separately (§6.5).
  */
 export function TokensetList({
   tokensets,
+  markets,
+  masterAddress,
+  agentApproved,
   onDelete,
+  onBought,
 }: {
   tokensets: Tokenset[];
+  markets: SpotMarket[];
+  masterAddress: Address | undefined;
+  agentApproved: boolean;
   onDelete: (id: string) => void;
+  onBought: () => void;
 }) {
   if (tokensets.length === 0) {
     return <p className="muted">No tokensets yet. Compose one above to get started.</p>;
@@ -45,6 +55,15 @@ export function TokensetList({
               </span>
             ))}
           </div>
+          {masterAddress && (
+            <BuyForm
+              tokenset={ts}
+              markets={markets}
+              masterAddress={masterAddress}
+              agentApproved={agentApproved}
+              onBought={onBought}
+            />
+          )}
         </li>
       ))}
     </ul>
