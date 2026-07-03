@@ -371,3 +371,29 @@ button.ghost {
   background: #1d232c;
   color: var(--text);
 }
+
+/* Agent approval */
+.agent-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.agent-panel p {
+  margin: 0;
+  max-width: 60ch;
+}
+
+.agent-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.agent-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+}

@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { useAccount } from "wagmi";
+import { AgentApproval } from "./components/AgentApproval";
 import { NetworkBanner } from "./components/NetworkBanner";
 import { SelectedBasket } from "./components/SelectedBasket";
 import { TokenPicker } from "./components/TokenPicker";
@@ -116,6 +117,10 @@ export default function App() {
           <>
             <section className="panel">
               <UsdcBalance />
+            </section>
+
+            <section className="panel">
+              <AgentApproval />
             </section>
 
             <ComposeTokenset onCreate={create} />
