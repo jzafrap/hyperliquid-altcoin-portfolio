@@ -1,11 +1,15 @@
 import { useCallback, useState } from "react";
 import { useAccount } from "wagmi";
 import { AgentApproval } from "./components/AgentApproval";
+import { LotsList } from "./components/LotsList";
 import { NetworkBanner } from "./components/NetworkBanner";
 import { SelectedBasket } from "./components/SelectedBasket";
 import { TokenPicker } from "./components/TokenPicker";
 import { TokensetList } from "./components/TokensetList";
 import { WalletConnect } from "./components/WalletConnect";
+import { useAgent } from "./hooks/useAgent";
+import { useLots } from "./hooks/useLots";
+import { useSpotMarkets } from "./hooks/useSpotMarkets";
 import { useTokensets } from "./hooks/useTokensets";
 import { useUsdcBalance } from "./hooks/useUsdcBalance";
 import type { SpotMarket } from "./lib/markets";
@@ -101,6 +105,9 @@ function ComposeTokenset({
 export default function App() {
   const { address, isConnected } = useAccount();
   const { tokensets, create, remove } = useTokensets(address);
+  const { isApproved } = useAgent();
+  const { data: markets = [] } = useSpotMarkets();
+  const { lots, refresh: refreshLots } = useLots(address);
 
   return (
     <div className="app">
@@ -127,7 +134,19 @@ export default function App() {
 
             <section className="panel">
               <h2>Your tokensets</h2>
-              <TokensetList tokensets={tokensets} onDelete={remove} />
+              <TokensetList
+                tokensets={tokensets}
+                markets={markets}
+                masterAddress={address}
+                agentApproved={isApproved}
+                onDelete={remove}
+                onBought={refreshLots}
+              />
+            </section>
+
+            <section className="panel">
+              <h2>Open lots</h2>
+              <LotsList lots={lots} />
             </section>
           </>
         ) : (

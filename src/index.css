@@ -397,3 +397,79 @@ button.ghost {
   border-radius: 50%;
   background: var(--accent);
 }
+
+.ok {
+  color: var(--accent);
+}
+
+/* Buy form */
+.buy-form {
+  margin-top: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.buy-row {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.buy-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.4rem 0.6rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.buy-row button {
+  padding: 0.4rem 0.9rem;
+}
+
+/* Lots */
+.lots-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.lot-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.75rem 0.9rem;
+  background: var(--bg);
+}
+
+.lot-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.lot-legs {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.lot-legs td {
+  padding: 0.15rem 0.3rem;
+}
+
+.lot-legs td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.lot-legs tr.leg-failed td {
+  color: var(--danger);
+}
