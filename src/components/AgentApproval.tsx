@@ -47,6 +47,9 @@ export function AgentApproval() {
       <button type="button" onClick={approve} disabled={!canApprove || isApproving}>
         {isApproving ? "Waiting for signature…" : "Approve trading agent"}
       </button>
+      {!canApprove && (
+        <p className="muted small">Connect a wallet to enable approval.</p>
+      )}
       {error && <p className="error">{error}</p>}
     </div>
   );
