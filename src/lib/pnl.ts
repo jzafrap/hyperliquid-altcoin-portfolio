@@ -98,6 +98,23 @@ export function aggregateTotals(lotPnls: LotPnl[]): PnlTotals {
   return totalsFromLegs(lotPnls.flatMap((l) => l.legs));
 }
 
+/** Positions worth less than this (USDC) are considered "small" / dust. */
+export const SMALL_POSITION_USD = 5;
+
+/**
+ * Whether a lot's current value is below `threshold` — used by the "hide small
+ * balances" filter. Only judged as small when the lot is actually valuable (at
+ * least one leg has a current price); a fully-unpriced lot is never hidden, so a
+ * price outage can't make real positions disappear.
+ */
+export function isSmallPosition(
+  pnl: LotPnl,
+  threshold = SMALL_POSITION_USD,
+): boolean {
+  const pricedLegs = pnl.legs.length - pnl.totals.unpricedCount;
+  return pricedLegs > 0 && pnl.totals.valueUsd < threshold;
+}
+
 /** Default age after which live prices are considered stale for P&L display. */
 export const PRICE_STALE_MS = 90_000;
 

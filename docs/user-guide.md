@@ -61,6 +61,11 @@ Possible outcomes:
 P&L is unrealized and derived from current mid prices. If prices go stale or fail
 to load, a ⚠ banner appears so you don't act on outdated numbers.
 
+**Hide small balances.** Toggle *Hide small balances (< $5.00)* to hide lots whose
+current value is under $5 (dust). A lot that can't be priced right now is never
+hidden, so a price outage won't make real positions disappear. The count of hidden
+lots is shown next to the toggle.
+
 ## Sell a lot
 
 Each open lot has **Sell 25% / 50% / 100%** buttons.
