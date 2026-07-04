@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Address } from "viem";
+import { useUsdcBalance } from "../hooks/useUsdcBalance";
 import { executeBuy } from "../lib/execute";
 import { formatUsd } from "../lib/format";
 import type { SpotMarket } from "../lib/markets";
@@ -27,6 +28,7 @@ export function BuyForm({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { data: availableUsdc, refetch: refetchBalance } = useUsdcBalance(masterAddress);
 
   // Resolve the set's tokens to current markets, preserving basket order.
   const resolved = tokenset.tokens
@@ -36,7 +38,8 @@ export function BuyForm({
 
   const minTotal = minTotalFor(tokenset.tokens.length);
   const usdc = Number(amount);
-  const plan = amount && resolved.length ? planBuy(resolved, usdc) : null;
+  const plan =
+    amount && resolved.length ? planBuy(resolved, usdc, undefined, availableUsdc) : null;
 
   if (!agentApproved) {
     return <p className="muted small">Enable trading above to buy this set.</p>;
@@ -48,12 +51,19 @@ export function BuyForm({
     setError(null);
     setMessage(null);
     try {
+      // Best-effort balance re-read before executing. react-query's refetch keeps
+      // the last value on failure, so on a hard error we pass undefined (skip the
+      // client guard) rather than trust a stale figure — the exchange remains the
+      // authoritative balance check either way.
+      const fresh = await refetchBalance();
+      const balance = fresh.isError ? undefined : fresh.data;
       const res = await executeBuy({
         masterAddress,
         tokensetId: tokenset.id,
         tokensetName: tokenset.name,
         markets: resolved,
         usdcTotal: usdc,
+        availableUsdc: balance,
       });
       if (!res.persisted) {
         // Order filled but the lot could not be saved — warn loudly, do NOT retry.
@@ -108,6 +118,7 @@ export function BuyForm({
         <p className="muted small">
           ~{formatUsd(plan.legs[0].allocationUsd)} per token · planned{" "}
           {formatUsd(plan.plannedUsd)} across {plan.legs.length}
+          {availableUsdc !== undefined && ` · ${formatUsd(availableUsdc)} available`}
         </p>
       )}
       {message && <p className="ok small">{message}</p>}

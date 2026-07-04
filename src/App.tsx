@@ -106,7 +106,11 @@ export default function App() {
   const { address, isConnected } = useAccount();
   const { tokensets, create, remove } = useTokensets(address);
   const { isApproved } = useAgent();
-  const { data: markets = [] } = useSpotMarkets();
+  const {
+    data: markets = [],
+    dataUpdatedAt: pricesUpdatedAt,
+    isError: pricesError,
+  } = useSpotMarkets();
   const { lots, refresh: refreshLots } = useLots(address);
 
   return (
@@ -152,6 +156,8 @@ export default function App() {
                 masterAddress={address}
                 agentApproved={isApproved}
                 onSold={refreshLots}
+                pricesUpdatedAt={pricesUpdatedAt}
+                pricesError={pricesError}
               />
             </section>
           </>

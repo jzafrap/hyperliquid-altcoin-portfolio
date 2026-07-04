@@ -97,3 +97,20 @@ export function computeLotPnl(
 export function aggregateTotals(lotPnls: LotPnl[]): PnlTotals {
   return totalsFromLegs(lotPnls.flatMap((l) => l.legs));
 }
+
+/** Default age after which live prices are considered stale for P&L display. */
+export const PRICE_STALE_MS = 90_000;
+
+/**
+ * Whether prices are too old to trust for P&L (§7 staleness guard). Treats an
+ * unset/zero timestamp as stale.
+ */
+export function isPriceStale(
+  updatedAt: number,
+  now: number,
+  thresholdMs = PRICE_STALE_MS,
+): boolean {
+  // Fail safe: a missing/invalid timestamp counts as stale.
+  if (!Number.isFinite(updatedAt) || updatedAt <= 0) return true;
+  return now - updatedAt > thresholdMs;
+}

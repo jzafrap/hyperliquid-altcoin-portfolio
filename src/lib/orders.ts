@@ -135,6 +135,7 @@ export function planBuy(
   markets: BuyMarketInput[],
   usdcTotal: number,
   slippage = DEFAULT_SLIPPAGE,
+  availableUsdc?: number,
 ): BuyPlan {
   const n = markets.length;
   const minTotal = minTotalFor(n);
@@ -146,6 +147,18 @@ export function planBuy(
   } else if (n > 0 && usdcTotal < minTotal) {
     errors.push(
       `Amount too low: need at least ${minTotal} USDC (${MIN_ORDER_NOTIONAL_USD} × ${n} tokens)`,
+    );
+  }
+
+  // Insufficient-funds guard (§7): checked at plan time and re-checked at execution.
+  if (
+    availableUsdc !== undefined &&
+    Number.isFinite(availableUsdc) &&
+    Number.isFinite(usdcTotal) &&
+    usdcTotal > availableUsdc + NOTIONAL_EPSILON
+  ) {
+    errors.push(
+      `Insufficient USDC: need ${usdcTotal}, have ${availableUsdc.toFixed(2)}`,
     );
   }
 
