@@ -9,8 +9,19 @@ per-token and per-lot P&L tracking.
 
 ## Status
 
-Early development. Roadmap slices 0–1 done: environment switch, wallet connect
-(Rabby/MetaMask, no keys stored), and live USDC spot balance.
+Testnet-ready, end to end. Implemented:
+
+- Environment switch (testnet-first) with a visible network banner
+- Wallet connect (Rabby/MetaMask) — no keys stored
+- Agent (API) wallet signing: one approval, in-memory trade-only key
+- Tokenset CRUD, persisted per network + wallet
+- Token picker with liquidity indicators (24h volume, spread, depth)
+- Equal-split market **buy** (min-total guard, IOC, lot recording)
+- Per-lot percentage **sell** (25/50/100%)
+- Live P&L dashboard (per token, per lot, per-tokenset aggregate)
+- Edge-case guards: insufficient funds, price staleness, partial fills
+
+All money paths are covered by unit tests and were adversarially reviewed.
 
 See [`instructions.md`](./instructions.md) for the full architecture, committed decisions,
 and build roadmap.

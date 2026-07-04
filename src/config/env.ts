@@ -31,6 +31,8 @@ export interface NetworkConfig {
   signatureChainId: number;
   /** Human label for the network banner. */
   label: string;
+  /** Hyperliquid web app (for depositing/bridging USDC — a prerequisite, §2). */
+  webAppUrl: string;
 }
 
 const CONFIGS: Record<HlNetwork, NetworkConfig> = {
@@ -41,6 +43,7 @@ const CONFIGS: Record<HlNetwork, NetworkConfig> = {
     wsUrl: "wss://api.hyperliquid-testnet.xyz/ws",
     signatureChainId: 421614, // Arbitrum Sepolia
     label: "Testnet",
+    webAppUrl: "https://app.hyperliquid-testnet.xyz",
   },
   mainnet: {
     network: "mainnet",
@@ -49,6 +52,7 @@ const CONFIGS: Record<HlNetwork, NetworkConfig> = {
     wsUrl: "wss://api.hyperliquid.xyz/ws",
     signatureChainId: 42161, // Arbitrum One
     label: "Mainnet",
+    webAppUrl: "https://app.hyperliquid.xyz",
   },
 };
 

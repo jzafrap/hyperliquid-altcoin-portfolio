@@ -540,3 +540,28 @@ button.ghost {
   padding: 0.4rem 0.7rem;
   font-weight: 600;
 }
+
+/* Balance row + deposit hint */
+.usdc-balance-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Footer */
+.app-footer {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
