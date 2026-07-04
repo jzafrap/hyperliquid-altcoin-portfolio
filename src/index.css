@@ -565,3 +565,22 @@ a:hover {
   border-top: 1px solid var(--border);
   text-align: center;
 }
+
+/* Portfolio controls */
+.portfolio-controls {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  color: var(--text);
+  user-select: none;
+}
+
+.toggle input {
+  cursor: pointer;
+}

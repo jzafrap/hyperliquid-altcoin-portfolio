@@ -7,6 +7,9 @@ import {
   aggregateTotals,
   computeLotPnl,
   isPriceStale,
+  isSmallPosition,
+  SMALL_POSITION_USD,
+  type LotPnl,
   type PnlTotals,
 } from "../lib/pnl";
 import { SellForm } from "./SellForm";
@@ -67,36 +70,75 @@ export function PortfolioDashboard({
   }, []);
   const stale = pricesError || isPriceStale(pricesUpdatedAt, now);
 
+  const [hideSmall, setHideSmall] = useState(false);
+
   const priceByToken = useMemo(
     () => new Map(markets.map((m) => [m.tokenName, m.midPx])),
     [markets],
   );
 
-  // Group lots that still have holdings, by tokenset (preserving order).
-  const groups = useMemo(() => {
+  // Group lots that still have holdings, by tokenset (preserving order), and
+  // compute each lot's P&L. Optionally hide lots worth less than $5.
+  const { visibleGroups, hiddenCount } = useMemo(() => {
     const open = lots.filter((lot) => lot.legs.some((l) => l.qtyRemaining > DUST));
-    const byId = new Map<string, { name: string; lots: BuyRecord[] }>();
+    const byId = new Map<string, { name: string; lotPnls: LotPnl[] }>();
     for (const lot of open) {
-      const g = byId.get(lot.tokensetId) ?? { name: lot.tokensetName, lots: [] };
-      g.lots.push(lot);
+      const g = byId.get(lot.tokensetId) ?? { name: lot.tokensetName, lotPnls: [] };
+      g.lotPnls.push(computeLotPnl(lot, priceByToken));
       byId.set(lot.tokensetId, g);
     }
-    return [...byId.values()];
-  }, [lots]);
 
-  if (groups.length === 0) {
+    let hidden = 0;
+    const groups = [...byId.values()]
+      .map((g) => {
+        const lotPnls = hideSmall
+          ? g.lotPnls.filter((p) => {
+              const small = isSmallPosition(p);
+              if (small) hidden += 1;
+              return !small;
+            })
+          : g.lotPnls;
+        return { name: g.name, lotPnls };
+      })
+      .filter((g) => g.lotPnls.length > 0);
+
+    return { visibleGroups: groups, hiddenCount: hidden };
+  }, [lots, priceByToken, hideSmall]);
+
+  const hasAnyOpen = lots.some((lot) => lot.legs.some((l) => l.qtyRemaining > DUST));
+  if (!hasAnyOpen) {
     return <p className="muted">No open positions.</p>;
   }
 
   return (
     <div className="portfolio">
+      <div className="portfolio-controls">
+        <label className="toggle small">
+          <input
+            type="checkbox"
+            checked={hideSmall}
+            onChange={(e) => setHideSmall(e.target.checked)}
+          />
+          Hide small balances (&lt; {formatUsd(SMALL_POSITION_USD)})
+          {hideSmall && hiddenCount > 0 && (
+            <span className="muted"> · {hiddenCount} hidden</span>
+          )}
+        </label>
+      </div>
+
       {stale && (
         <p className="stale-banner small">
           ⚠ Prices may be stale — P&amp;L below might be out of date.
         </p>
       )}
-      {groups.map((group) => {
-        const lotPnls = group.lots.map((lot) => computeLotPnl(lot, priceByToken));
+
+      {visibleGroups.length === 0 ? (
+        <p className="muted">
+          All open positions are below {formatUsd(SMALL_POSITION_USD)}.
+        </p>
+      ) : (
+        visibleGroups.map((group) => {
+        const lotPnls = group.lotPnls;
         const agg = aggregateTotals(lotPnls);
         return (
           <div key={group.name} className="portfolio-group">
@@ -150,7 +192,8 @@ export function PortfolioDashboard({
             ))}
           </div>
         );
-      })}
+        })
+      )}
     </div>
   );
 }

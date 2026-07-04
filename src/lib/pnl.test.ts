@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { BuyRecord } from "./lots";
-import { aggregateTotals, computeLotPnl, isPriceStale, PRICE_STALE_MS } from "./pnl";
+import {
+  aggregateTotals,
+  computeLotPnl,
+  isPriceStale,
+  isSmallPosition,
+  PRICE_STALE_MS,
+} from "./pnl";
 
 function lot(over: Partial<BuyRecord> = {}): BuyRecord {
   return {
@@ -81,6 +87,33 @@ describe("isPriceStale", () => {
     expect(isPriceStale(0, 1_000_000)).toBe(true);
     expect(isPriceStale(-5, 1_000_000)).toBe(true);
     expect(isPriceStale(NaN, 1_000_000)).toBe(true);
+  });
+});
+
+describe("isSmallPosition", () => {
+  it("flags a lot valued below the threshold", () => {
+    // 5 A @ 0.5 = $2.5 value < $5
+    const pnl = computeLotPnl(
+      { ...lot(), legs: [{ token: "A", assetId: 10001, usdcAllocated: 50, qtyBought: 5, avgEntryPrice: 10, qtyRemaining: 5 }] },
+      new Map([["A", 0.5]]),
+    );
+    expect(isSmallPosition(pnl, 5)).toBe(true);
+  });
+
+  it("does not flag a lot at or above the threshold", () => {
+    const pnl = computeLotPnl(
+      { ...lot(), legs: [{ token: "A", assetId: 10001, usdcAllocated: 50, qtyBought: 5, avgEntryPrice: 10, qtyRemaining: 5 }] },
+      new Map([["A", 2]]), // $10 value
+    );
+    expect(isSmallPosition(pnl, 5)).toBe(false);
+  });
+
+  it("never flags a fully-unpriced lot (can't value it)", () => {
+    const pnl = computeLotPnl(
+      { ...lot(), legs: [{ token: "A", assetId: 10001, usdcAllocated: 50, qtyBought: 5, avgEntryPrice: 10, qtyRemaining: 5 }] },
+      new Map([["A", null]]),
+    );
+    expect(isSmallPosition(pnl, 5)).toBe(false);
   });
 });
 
