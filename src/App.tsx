@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
 import { useAccount } from "wagmi";
 import { AgentApproval } from "./components/AgentApproval";
-import { LotsList } from "./components/LotsList";
 import { NetworkBanner } from "./components/NetworkBanner";
+import { PortfolioDashboard } from "./components/PortfolioDashboard";
 import { SelectedBasket } from "./components/SelectedBasket";
 import { TokenPicker } from "./components/TokenPicker";
 import { TokensetList } from "./components/TokensetList";
@@ -145,8 +145,8 @@ export default function App() {
             </section>
 
             <section className="panel">
-              <h2>Open lots</h2>
-              <LotsList
+              <h2>Portfolio</h2>
+              <PortfolioDashboard
                 lots={lots}
                 markets={markets}
                 masterAddress={address}

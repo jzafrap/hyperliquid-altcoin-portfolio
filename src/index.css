@@ -494,3 +494,41 @@ button.ghost {
   border-color: var(--danger);
   color: var(--danger);
 }
+
+/* Portfolio dashboard */
+.portfolio {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.portfolio-group {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+}
+
+.group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.pnl-totals {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+}
+
+.lot-legs thead th {
+  text-align: left;
+  font-weight: 500;
+  padding: 0.15rem 0.3rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.lot-legs th.num {
+  text-align: right;
+}
