@@ -58,7 +58,10 @@ export function useAgent() {
       await approveAgentLib(walletClient, address);
       // Approval state flows through the reactive snapshot — nothing to set here.
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      // Surface the underlying cause (SDK wraps wallet errors in a generic message).
+      const cause =
+        e instanceof Error && e.cause instanceof Error ? ` (${e.cause.message})` : "";
+      setError((e instanceof Error ? e.message : String(e)) + cause);
     } finally {
       setIsApproving(false);
     }

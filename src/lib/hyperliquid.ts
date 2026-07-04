@@ -16,9 +16,6 @@ import { ENV } from "../config/env";
  *   built from the in-memory agent key (for orders) — the dual-signer model (§3).
  */
 
-/** Signature domain chain id as the `0x`-prefixed hex the SDK expects. */
-const SIGNATURE_CHAIN_ID = `0x${ENV.signatureChainId.toString(16)}` as const;
-
 function makeTransport(): HttpTransport {
   return new HttpTransport({ isTestnet: ENV.isTestnet });
 }
@@ -38,11 +35,17 @@ export function getInfoClient(): InfoClient {
  * `wallet` may be a viem WalletClient (main wallet) or a viem local account
  * (agent key). We keep the signer out of module state — callers own its lifecycle
  * (the agent key must live only in session memory, §3).
+ *
+ * NOTE: we deliberately do NOT pin `signatureChainId`. The SDK derives it from the
+ * wallet's current chain, so the EIP-712 domain matches the wallet's active
+ * network. Strict wallets (e.g. Rabby) reject signing typed data whose domain
+ * chainId differs from the active chain, and Hyperliquid accepts any signature
+ * chain id for approveAgent (verified on testnet: 0x1 / 0xa4b1 / 0x66eee all
+ * accepted). Pinning Arbitrum here caused "Failed to sign the typed data".
  */
 export function makeExchangeClient(wallet: AbstractWallet): ExchangeClient {
   return new ExchangeClient({
     transport: makeTransport(),
     wallet,
-    signatureChainId: SIGNATURE_CHAIN_ID,
   });
 }
