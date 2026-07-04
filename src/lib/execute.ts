@@ -34,6 +34,8 @@ export interface ExecuteBuyArgs {
   markets: BuyMarketInput[];
   usdcTotal: number;
   slippage?: number;
+  /** Current available USDC — re-checked here so a stale UI can't overspend. */
+  availableUsdc?: number;
 }
 
 export interface ExecuteBuyResult {
@@ -63,10 +65,17 @@ function safeId(): string {
  *   (which would invite a double-spend retry).
  */
 export async function executeBuy(args: ExecuteBuyArgs): Promise<ExecuteBuyResult> {
-  const { masterAddress, tokensetId, tokensetName, markets, usdcTotal, slippage } =
-    args;
+  const {
+    masterAddress,
+    tokensetId,
+    tokensetName,
+    markets,
+    usdcTotal,
+    slippage,
+    availableUsdc,
+  } = args;
 
-  const plan = planBuy(markets, usdcTotal, slippage);
+  const plan = planBuy(markets, usdcTotal, slippage, availableUsdc);
   if (!plan.ok) throw new Error(plan.errors.join("; "));
 
   // Trust boundary: verifies an approved agent is bound to this exact master.

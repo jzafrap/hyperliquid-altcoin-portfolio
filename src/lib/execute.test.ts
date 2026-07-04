@@ -74,6 +74,21 @@ describe("executeBuy", () => {
     expect(getAgentExchangeClient).not.toHaveBeenCalled();
   });
 
+  it("throws (before the exchange) when the total exceeds available USDC", async () => {
+    mockOrder([]);
+    await expect(
+      executeBuy({
+        masterAddress: MASTER,
+        tokensetId: "ts1",
+        tokensetName: "Set",
+        markets,
+        usdcTotal: 20,
+        availableUsdc: 10,
+      }),
+    ).rejects.toThrow(/insufficient usdc/i);
+    expect(getAgentExchangeClient).not.toHaveBeenCalled();
+  });
+
   it("flags partial when a leg under-fills but does not throw", async () => {
     // planned size ~1.96; fill only 1.0 → partial, still recorded.
     mockOrder([{ filled: { totalSz: "1.0", avgPx: "10.1", oid: 1 } }]);

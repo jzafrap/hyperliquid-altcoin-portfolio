@@ -532,3 +532,11 @@ button.ghost {
 .lot-legs th.num {
   text-align: right;
 }
+
+.stale-banner {
+  color: #2a1e05;
+  background: #fbbf4d;
+  border-radius: 8px;
+  padding: 0.4rem 0.7rem;
+  font-weight: 600;
+}

@@ -1,9 +1,14 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Address } from "viem";
 import { formatPct, formatPrice, formatUsd } from "../lib/format";
 import type { BuyRecord } from "../lib/lots";
 import type { SpotMarket } from "../lib/markets";
-import { aggregateTotals, computeLotPnl, type PnlTotals } from "../lib/pnl";
+import {
+  aggregateTotals,
+  computeLotPnl,
+  isPriceStale,
+  type PnlTotals,
+} from "../lib/pnl";
 import { SellForm } from "./SellForm";
 
 const DUST = 1e-9;
@@ -43,13 +48,25 @@ export function PortfolioDashboard({
   masterAddress,
   agentApproved,
   onSold,
+  pricesUpdatedAt = 0,
+  pricesError = false,
 }: {
   lots: BuyRecord[];
   markets: SpotMarket[];
   masterAddress: Address | undefined;
   agentApproved: boolean;
   onSold: () => void;
+  pricesUpdatedAt?: number;
+  pricesError?: boolean;
 }) {
+  // Tick so the staleness banner appears even when nothing else re-renders.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(id);
+  }, []);
+  const stale = pricesError || isPriceStale(pricesUpdatedAt, now);
+
   const priceByToken = useMemo(
     () => new Map(markets.map((m) => [m.tokenName, m.midPx])),
     [markets],
@@ -73,6 +90,11 @@ export function PortfolioDashboard({
 
   return (
     <div className="portfolio">
+      {stale && (
+        <p className="stale-banner small">
+          ⚠ Prices may be stale — P&amp;L below might be out of date.
+        </p>
+      )}
       {groups.map((group) => {
         const lotPnls = group.lots.map((lot) => computeLotPnl(lot, priceByToken));
         const agg = aggregateTotals(lotPnls);

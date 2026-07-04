@@ -117,6 +117,17 @@ describe("planBuy", () => {
     expect(plan.errors.some((e) => /no price/i.test(e))).toBe(true);
   });
 
+  it("rejects when the total exceeds available USDC", () => {
+    const plan = planBuy([market()], 50, undefined, 30);
+    expect(plan.ok).toBe(false);
+    expect(plan.errors.some((e) => /insufficient usdc/i.test(e))).toBe(true);
+  });
+
+  it("allows a total within available USDC", () => {
+    const plan = planBuy([market()], 50, undefined, 100);
+    expect(plan.ok).toBe(true);
+  });
+
   it("reports plannedUsd from rounded notionals (may differ from total)", () => {
     // price 3, szDecimals 0, total 20, 1 token -> size floor(20/3)=6 -> notional 18
     const plan = planBuy([market({ midPx: 3, szDecimals: 0 })], 20);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BuyRecord } from "./lots";
-import { aggregateTotals, computeLotPnl } from "./pnl";
+import { aggregateTotals, computeLotPnl, isPriceStale, PRICE_STALE_MS } from "./pnl";
 
 function lot(over: Partial<BuyRecord> = {}): BuyRecord {
   return {
@@ -68,6 +68,19 @@ describe("computeLotPnl", () => {
     });
     const { totals } = computeLotPnl(l, new Map([["A", 5]]));
     expect(totals.pnlPct).toBeNull();
+  });
+});
+
+describe("isPriceStale", () => {
+  it("is fresh within the threshold and stale beyond it", () => {
+    const now = 1_000_000;
+    expect(isPriceStale(now - 1000, now)).toBe(false);
+    expect(isPriceStale(now - (PRICE_STALE_MS + 1), now)).toBe(true);
+  });
+  it("treats an unset or invalid timestamp as stale", () => {
+    expect(isPriceStale(0, 1_000_000)).toBe(true);
+    expect(isPriceStale(-5, 1_000_000)).toBe(true);
+    expect(isPriceStale(NaN, 1_000_000)).toBe(true);
   });
 });
 
