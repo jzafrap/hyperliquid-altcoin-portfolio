@@ -3,12 +3,15 @@ import { getAgentExchangeClient } from "./agent";
 import {
   addLot,
   anyLegFilled,
+  applySellFills,
   buildLegsFromStatuses,
   loadLots,
   makeBuyRecord,
+  replaceLot,
   saveLots,
   type BuyRecord,
   type OrderStatus,
+  type SellFill,
 } from "./lots";
 import {
   buildBuyOrders,
@@ -16,6 +19,12 @@ import {
   type BuyMarketInput,
   type BuyPlan,
 } from "./orders";
+import {
+  buildSellOrders,
+  planSell,
+  type SellMarketInput,
+  type SellPlan,
+} from "./sell";
 
 export interface ExecuteBuyArgs {
   masterAddress: Address;
@@ -94,4 +103,82 @@ export async function executeBuy(args: ExecuteBuyArgs): Promise<ExecuteBuyResult
   );
 
   return { plan, record, partial, persisted };
+}
+
+export interface ExecuteSellArgs {
+  masterAddress: Address;
+  lot: BuyRecord;
+  /** Fraction of each leg's remaining quantity to sell (0 < pct ≤ 1). */
+  pct: number;
+  /** Current markets (used to price/size the sell), in any order. */
+  markets: SellMarketInput[];
+  slippage?: number;
+}
+
+export interface ExecuteSellResult {
+  plan: SellPlan;
+  lot: BuyRecord;
+  realizedPnlUsd: number;
+  /** True if some sellable legs did not fully fill, or some legs were unsellable. */
+  partial: boolean;
+  persisted: boolean;
+}
+
+/**
+ * Sell a percentage of a single lot (§6.4). Same money-safety ordering as buys:
+ * throw before anything executes (invalid plan) or if nothing sold at all; once
+ * any sell fills, never throw — report via `partial`/`persisted`. Only the target
+ * lot is mutated (independent lots).
+ *
+ * KNOWN v1 LIMITATION: the load→modify→save of lots is not atomic across browser
+ * tabs. Within a tab it is race-free (synchronous after the fill), and useLots
+ * syncs on the `storage` event, but two tabs trading the same wallet at the same
+ * instant can lose one update's bookkeeping (the on-exchange fills are still
+ * correct). A cross-tab lock + re-read/merge is a planned follow-up (serverless v1).
+ */
+export async function executeSell(args: ExecuteSellArgs): Promise<ExecuteSellResult> {
+  const { masterAddress, lot, pct, markets, slippage } = args;
+
+  const marketByToken = new Map(markets.map((m) => [m.tokenName, m]));
+  const plan = planSell(lot, pct, marketByToken, slippage);
+  if (!plan.ok) throw new Error(plan.errors.join("; "));
+
+  const client = getAgentExchangeClient(masterAddress);
+  const sellableLegs = plan.legs.filter((l) => l.sellable);
+  const orders = buildSellOrders(sellableLegs);
+  const res = await client.order({ orders, grouping: "na" });
+
+  const statuses = (res.response?.data?.statuses ?? []) as OrderStatus[];
+  const fills: SellFill[] = sellableLegs.map((leg, i) => {
+    const status = statuses[i];
+    if (status && typeof status === "object" && "filled" in status) {
+      return {
+        token: leg.token,
+        soldQty: Number(status.filled.totalSz),
+        avgPx: Number(status.filled.avgPx),
+      };
+    }
+    return { token: leg.token, soldQty: 0, avgPx: 0 };
+  });
+
+  const filled = fills.filter((f) => f.soldQty > 0);
+  if (filled.length === 0) {
+    throw new Error("Sell did not fill");
+  }
+
+  // A real sell occurred — do not throw past this point.
+  const { lot: updatedLot, realizedPnlUsd } = applySellFills(lot, filled);
+
+  let persisted = true;
+  try {
+    saveLots(masterAddress, replaceLot(loadLots(masterAddress), updatedLot));
+  } catch {
+    persisted = false;
+  }
+
+  const partial =
+    plan.legs.some((l) => !l.sellable) ||
+    sellableLegs.some((leg, i) => (fills[i]?.soldQty ?? 0) < leg.sellQty - 1e-12);
+
+  return { plan, lot: updatedLot, realizedPnlUsd, partial, persisted };
 }

@@ -146,7 +146,13 @@ export default function App() {
 
             <section className="panel">
               <h2>Open lots</h2>
-              <LotsList lots={lots} />
+              <LotsList
+                lots={lots}
+                markets={markets}
+                masterAddress={address}
+                agentApproved={isApproved}
+                onSold={refreshLots}
+              />
             </section>
           </>
         ) : (

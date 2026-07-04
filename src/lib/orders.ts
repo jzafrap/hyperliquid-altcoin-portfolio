@@ -42,11 +42,17 @@ export function toDecimalString(value: number, maxDecimals: number): string {
     : fixed;
 }
 
-/** Round a size DOWN to szDecimals — never round up, to avoid overspending. */
+/**
+ * Round a size DOWN to szDecimals — never round up, to avoid overspending.
+ * A tiny epsilon absorbs binary-float error so an already-aligned value isn't
+ * truncated by a full unit (e.g. 0.58 * 100 = 57.99999999999999 → must stay 0.58,
+ * not become 0.57). The epsilon (1e-9) is far larger than FP noise yet far smaller
+ * than any real szDecimals tick, so genuine fractions are still rounded down.
+ */
 export function roundSize(size: number, szDecimals: number): number {
   if (!(size > 0)) return 0;
   const factor = 10 ** szDecimals;
-  return Math.floor(size * factor) / factor;
+  return Math.floor(size * factor + 1e-9) / factor;
 }
 
 /** Max decimal places allowed for a spot price given szDecimals. */

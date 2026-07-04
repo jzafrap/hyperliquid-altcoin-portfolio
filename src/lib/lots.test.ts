@@ -2,15 +2,33 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   addLot,
   anyLegFilled,
+  applySellFills,
   buildLegsFromStatuses,
   loadLots,
   makeBuyRecord,
+  replaceLot,
   saveLots,
   spentFromLegs,
   type BuyRecord,
   type OrderStatus,
 } from "./lots";
 import type { BuyPlan } from "./orders";
+
+function lotFixture(): BuyRecord {
+  return {
+    id: "lot1",
+    tokensetId: "ts1",
+    tokensetName: "Set",
+    wallet: "0xabc",
+    usdcSpent: 100,
+    status: "open",
+    createdAt: 1,
+    legs: [
+      { token: "A", assetId: 10001, usdcAllocated: 50, qtyBought: 5, avgEntryPrice: 10, qtyRemaining: 5 },
+      { token: "B", assetId: 10002, usdcAllocated: 50, qtyBought: 2, avgEntryPrice: 25, qtyRemaining: 2 },
+    ],
+  };
+}
 
 const plan: BuyPlan = {
   usdcTotal: 100,
@@ -112,6 +130,54 @@ describe("makeBuyRecord", () => {
       usdcSpent: 100,
       createdAt: 123,
     });
+  });
+});
+
+describe("applySellFills", () => {
+  it("reduces qtyRemaining, accrues realized P&L, and sets partially_sold", () => {
+    const { lot, realizedPnlUsd } = applySellFills(lotFixture(), [
+      { token: "A", soldQty: 2.5, avgPx: 12 }, // pnl = 2.5*(12-10)=5
+    ]);
+    const legA = lot.legs.find((l) => l.token === "A")!;
+    expect(legA.qtyRemaining).toBe(2.5);
+    expect(legA.realizedPnlUsd).toBe(5);
+    expect(realizedPnlUsd).toBe(5);
+    expect(lot.status).toBe("partially_sold");
+  });
+
+  it("closes the lot when everything is sold", () => {
+    const { lot } = applySellFills(lotFixture(), [
+      { token: "A", soldQty: 5, avgPx: 9 }, // pnl -5
+      { token: "B", soldQty: 2, avgPx: 30 }, // pnl +10
+    ]);
+    expect(lot.status).toBe("closed");
+    expect(lot.legs.every((l) => l.qtyRemaining === 0)).toBe(true);
+  });
+
+  it("does not touch legs that were not sold", () => {
+    const { lot } = applySellFills(lotFixture(), [{ token: "A", soldQty: 1, avgPx: 11 }]);
+    const legB = lot.legs.find((l) => l.token === "B")!;
+    expect(legB.qtyRemaining).toBe(2);
+    expect(legB.realizedPnlUsd).toBeUndefined();
+  });
+
+  it("accrues realized P&L across successive sells", () => {
+    const first = applySellFills(lotFixture(), [{ token: "A", soldQty: 1, avgPx: 12 }]);
+    const second = applySellFills(first.lot, [{ token: "A", soldQty: 1, avgPx: 13 }]);
+    const legA = second.lot.legs.find((l) => l.token === "A")!;
+    expect(legA.qtyRemaining).toBe(3);
+    expect(legA.realizedPnlUsd).toBe(2 + 3); // 1*(12-10) + 1*(13-10)
+  });
+});
+
+describe("replaceLot", () => {
+  it("replaces by id and leaves others", () => {
+    const a = { ...lotFixture(), id: "a" };
+    const b = { ...lotFixture(), id: "b" };
+    const updated = { ...a, status: "closed" as const };
+    const result = replaceLot([a, b], updated);
+    expect(result.find((l) => l.id === "a")?.status).toBe("closed");
+    expect(result.find((l) => l.id === "b")?.status).toBe("open");
   });
 });
 

@@ -473,3 +473,24 @@ button.ghost {
 .lot-legs tr.leg-failed td {
   color: var(--danger);
 }
+
+/* Sell controls */
+.sell-form {
+  margin-top: 0.6rem;
+}
+
+.sell-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.sell-btn {
+  border: 1px solid var(--border);
+  padding: 0.25rem 0.6rem;
+}
+
+.sell-btn:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+}
