@@ -23,8 +23,22 @@ Testnet-ready, end to end. Implemented:
 
 All money paths are covered by unit tests and were adversarially reviewed.
 
-See [`instructions.md`](./instructions.md) for the full architecture, committed decisions,
-and build roadmap.
+## Documentation
+
+Full docs live in **[`docs/`](./docs/README.md)**:
+
+| Doc | For |
+|-----|-----|
+| [Getting Started](./docs/getting-started.md) | Install, configure, run, first trade. |
+| [User Guide](./docs/user-guide.md) | Every feature, step by step. |
+| [Trading Model](./docs/trading-model.md) | How buys/sells are sized, priced, recorded. |
+| [Architecture](./docs/architecture.md) | Code layout and data flow. |
+| [Security](./docs/security.md) | Key model, trust boundary, limitations. |
+| [Development](./docs/development.md) | Local setup, testing, workflow. |
+| [Hyperliquid Reference](./docs/hyperliquid-reference.md) | Verified API facts and gotchas. |
+
+See [`instructions.md`](./instructions.md) for the original build spec and committed
+design decisions.
 
 ## Stack
 
