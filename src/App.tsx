@@ -12,6 +12,7 @@ import { useLots } from "./hooks/useLots";
 import { useSpotMarkets } from "./hooks/useSpotMarkets";
 import { useTokensets } from "./hooks/useTokensets";
 import { useUsdcBalance } from "./hooks/useUsdcBalance";
+import { ENV } from "./config/env";
 import type { SpotMarket } from "./lib/markets";
 import type { NewTokenset } from "./lib/tokensets";
 
@@ -26,14 +27,24 @@ function UsdcBalance() {
   }
 
   return (
-    <div className="usdc-balance">
-      <span className="label">Spot USDC</span>
-      <span className="value">
-        {data?.toLocaleString(undefined, {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}
-      </span>
+    <div className="usdc-balance-row">
+      <div className="usdc-balance">
+        <span className="label">Spot USDC</span>
+        <span className="value">
+          {data?.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}
+        </span>
+      </div>
+      {data !== undefined && data <= 0 && (
+        <p className="muted small">
+          No USDC in your Hyperliquid spot balance yet.{" "}
+          <a href={ENV.webAppUrl} target="_blank" rel="noreferrer">
+            Deposit on Hyperliquid ({ENV.label}) →
+          </a>
+        </p>
+      )}
     </div>
   );
 }
@@ -110,6 +121,7 @@ export default function App() {
     data: markets = [],
     dataUpdatedAt: pricesUpdatedAt,
     isError: pricesError,
+    isLoading: marketsLoading,
   } = useSpotMarkets();
   const { lots, refresh: refreshLots } = useLots(address);
 
@@ -133,6 +145,15 @@ export default function App() {
             <section className="panel">
               <AgentApproval />
             </section>
+
+            {marketsLoading && (
+              <p className="muted small">Loading Hyperliquid spot markets…</p>
+            )}
+            {pricesError && !marketsLoading && (
+              <p className="error small">
+                Couldn't load spot markets — check your connection and retry.
+              </p>
+            )}
 
             <ComposeTokenset onCreate={create} />
 
@@ -167,6 +188,15 @@ export default function App() {
           </section>
         )}
       </main>
+
+      <footer className="app-footer muted small">
+        <span>
+          {ENV.label} · trade-only agent, no keys stored ·{" "}
+          <a href={ENV.webAppUrl} target="_blank" rel="noreferrer">
+            Hyperliquid
+          </a>
+        </span>
+      </footer>
     </div>
   );
 }
