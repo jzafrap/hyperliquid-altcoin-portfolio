@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
-import { useAccount, useWalletClient } from "wagmi";
+import { createWalletClient, custom, type EIP1193Provider } from "viem";
+import { useAccount } from "wagmi";
 import {
   approveAgent as approveAgentLib,
   clearAgent,
@@ -20,10 +21,15 @@ function sameAddress(a: string | undefined, b: string | undefined): boolean {
  * - Switching or disconnecting the wallet wipes any agent bound to a different
  *   master, and "approved" is only reported when the agent matches the connected
  *   wallet — closing the stale-agent window.
+ *
+ * The signer is built at approve time from the connector's EIP-1193 provider —
+ * NOT wagmi's chain-gated useWalletClient — because approveAgent only signs
+ * EIP-712 typed data (with an Arbitrum domain the SDK sets itself), so the
+ * wallet's active network is irrelevant. This lets approval work regardless of
+ * which chain the wallet happens to be on.
  */
 export function useAgent() {
-  const { address } = useAccount();
-  const { data: walletClient } = useWalletClient();
+  const { address, connector, isConnected } = useAccount();
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
   const [isApproving, setIsApproving] = useState(false);
@@ -39,10 +45,16 @@ export function useAgent() {
   }, [address]);
 
   const approve = useCallback(async () => {
-    if (!walletClient || !address) return;
+    if (!address || !connector) return;
     setIsApproving(true);
     setError(null);
     try {
+      const provider = (await connector.getProvider()) as EIP1193Provider;
+      // Chain-agnostic signer: signs typed data via the wallet on any network.
+      const walletClient = createWalletClient({
+        account: address,
+        transport: custom(provider),
+      });
       await approveAgentLib(walletClient, address);
       // Approval state flows through the reactive snapshot — nothing to set here.
     } catch (e) {
@@ -50,7 +62,7 @@ export function useAgent() {
     } finally {
       setIsApproving(false);
     }
-  }, [walletClient, address]);
+  }, [address, connector]);
 
   const revoke = useCallback(() => {
     clearAgent();
@@ -68,6 +80,6 @@ export function useAgent() {
     revoke,
     isApproving,
     error,
-    canApprove: Boolean(walletClient && address),
+    canApprove: Boolean(isConnected && address && connector),
   };
 }
