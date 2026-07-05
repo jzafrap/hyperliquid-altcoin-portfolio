@@ -187,6 +187,15 @@ describe("executeSell", () => {
     vi.clearAllMocks();
   });
 
+  it("refuses to sell a lot on the wrong market type", async () => {
+    mockOrder([]);
+    const perpLot: BuyRecord = { ...seedLot(), marketType: "perp" };
+    await expect(
+      executeSell({ masterAddress: MASTER, marketType: "spot", lot: perpLot, pct: 1, markets: sellMarkets }),
+    ).rejects.toThrow(/perp position.*spot market/i);
+    expect(getAgentExchangeClient).not.toHaveBeenCalled();
+  });
+
   it("sells, updates the lot, and returns realized P&L", async () => {
     const lot = seedLot();
     mockOrder([{ filled: { totalSz: "2.5", avgPx: "12", oid: 9 } }]);

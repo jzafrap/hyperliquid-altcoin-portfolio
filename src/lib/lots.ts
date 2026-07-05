@@ -34,6 +34,8 @@ export interface BuyRecord {
   tokensetId: string;
   tokensetName: string;
   wallet: string;
+  /** Market this lot was opened on. Optional for backward-compat with old lots. */
+  marketType?: MarketType;
   /** Actual USDC spent from fills (not the requested total — see §7 rounding). */
   usdcSpent: number;
   legs: BuyLeg[];
@@ -98,6 +100,7 @@ export interface NewLotInput {
   tokensetId: string;
   tokensetName: string;
   wallet: string;
+  marketType: MarketType;
   legs: BuyLeg[];
 }
 
@@ -111,6 +114,7 @@ export function makeBuyRecord(
     tokensetId: input.tokensetId,
     tokensetName: input.tokensetName,
     wallet: input.wallet,
+    marketType: input.marketType,
     usdcSpent: spentFromLegs(input.legs),
     legs: input.legs,
     status: "open",

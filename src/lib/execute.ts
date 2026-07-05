@@ -110,7 +110,7 @@ export async function executeBuy(args: ExecuteBuyArgs): Promise<ExecuteBuyResult
 
   // From here a real fill has occurred — do NOT throw; report via flags instead.
   const record = makeBuyRecord(
-    { tokensetId, tokensetName, wallet: masterAddress, legs },
+    { tokensetId, tokensetName, wallet: masterAddress, marketType, legs },
     safeId(),
     Date.now(),
   );
@@ -164,6 +164,15 @@ export interface ExecuteSellResult {
  */
 export async function executeSell(args: ExecuteSellArgs): Promise<ExecuteSellResult> {
   const { masterAddress, marketType, lot, pct, markets, slippage } = args;
+
+  // Defense in depth: never sell a lot against the wrong market type (would use a
+  // wrong asset id / reduceOnly flag). Old lots without a recorded type are trusted
+  // to their storage namespace.
+  if (lot.marketType && lot.marketType !== marketType) {
+    throw new Error(
+      `Lot is a ${lot.marketType} position; cannot sell it on the ${marketType} market`,
+    );
+  }
 
   const marketByToken = new Map(markets.map((m) => [m.tokenName, m]));
   const plan = planSell(lot, pct, marketByToken, slippage);

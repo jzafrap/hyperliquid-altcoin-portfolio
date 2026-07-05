@@ -8,14 +8,13 @@ import {
   volumeTier,
   type LiquidityTier,
 } from "./liquidity";
+import { spotAssetId } from "./orders";
 
 /** Spot or perpetual market. Drives asset id, price precision, and order side. */
 export type MarketType = "spot" | "perp";
 
 /** Max price decimals = MAX − szDecimals (8 for spot, 6 for perps). */
 const MAX_PRICE_DECIMALS: Record<MarketType, number> = { spot: 8, perp: 6 };
-/** Spot asset ids are offset; perp asset ids are the raw universe index. */
-const SPOT_ASSET_OFFSET = 10000;
 
 /** A tradable market (spot or perp), enriched with 24h context (§6.2). */
 export interface Market {
@@ -74,7 +73,7 @@ export async function getSpotMarkets(): Promise<Market[]> {
     markets.push({
       marketType: "spot",
       coin: u.name,
-      assetId: SPOT_ASSET_OFFSET + u.index,
+      assetId: spotAssetId(u.index),
       tokenName: base.name,
       szDecimals: base.szDecimals,
       priceMaxDecimals: priceMaxDecimals("spot", base.szDecimals),

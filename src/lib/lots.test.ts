@@ -121,7 +121,7 @@ describe("makeBuyRecord", () => {
       { filled: { totalSz: "2.5", avgPx: "20", oid: 2 } },
     ]);
     const rec = makeBuyRecord(
-      { tokensetId: "ts1", tokensetName: "Set", wallet: "0xabc", legs },
+      { tokensetId: "ts1", tokensetName: "Set", wallet: "0xabc", marketType: "spot", legs },
       "lot1",
       123,
     );
@@ -131,6 +131,7 @@ describe("makeBuyRecord", () => {
       status: "open",
       usdcSpent: 100,
       createdAt: 123,
+      marketType: "spot",
     });
   });
 });
@@ -189,7 +190,7 @@ describe("lots persistence", () => {
 
   it("round-trips and prepends lots, scoped per wallet and market type", () => {
     const rec: BuyRecord = makeBuyRecord(
-      { tokensetId: "ts1", tokensetName: "Set", wallet, legs: [] },
+      { tokensetId: "ts1", tokensetName: "Set", wallet, marketType: "spot", legs: [] },
       "lot1",
       1,
     );
