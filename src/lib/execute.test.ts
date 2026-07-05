@@ -29,11 +29,16 @@ function mockOrder(statuses: unknown[]) {
   });
 }
 
-/** Simulate the SDK throwing ApiRequestError on a bulk-partial (some legs errored). */
+/**
+ * Simulate the SDK throwing ApiRequestError on a bulk-partial (some legs errored).
+ * Mirrors the REAL shape: ApiRequestError.response is the full exchange envelope
+ * `{ status, response: { type, data: { statuses } } }`.
+ */
 function mockOrderThrows(statuses: unknown[]) {
   updateLeverageMock = vi.fn().mockResolvedValue({ status: "ok" });
   const err = Object.assign(new Error("bulk partial"), {
-    response: { type: "order", data: { statuses } },
+    name: "ApiRequestError",
+    response: { status: "ok", response: { type: "order", data: { statuses } } },
   });
   (getAgentExchangeClient as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
     order: vi.fn().mockRejectedValue(err),
