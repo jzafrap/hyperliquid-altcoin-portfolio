@@ -35,6 +35,8 @@ export interface Market {
   volumeTier: LiquidityTier;
   /** Perp only: maximum leverage the venue allows (we always trade 1x). */
   maxLeverage?: number;
+  /** Perp only: asset requires isolated margin (cross is not allowed). */
+  isolatedOnly?: boolean;
 }
 
 function priceMaxDecimals(marketType: MarketType, szDecimals: number): number {
@@ -119,6 +121,11 @@ export async function getPerpMarkets(): Promise<Market[]> {
       change24hPct: change24h(midPx, ctx ? Number(ctx.prevDayPx) : 0),
       volumeTier: volumeTier(dayNtlVlm),
       maxLeverage: u.maxLeverage,
+      // Some assets disallow cross margin — they must be opened isolated.
+      isolatedOnly:
+        u.onlyIsolated === true ||
+        u.marginMode === "strictIsolated" ||
+        u.marginMode === "noCross",
     });
   });
 
