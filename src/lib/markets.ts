@@ -9,40 +9,57 @@ import {
   type LiquidityTier,
 } from "./liquidity";
 
-/** A USDC-quoted spot market, enriched with 24h context (instructions.md §6.2). */
-export interface SpotMarket {
-  /** Universe name — the `coin` used for l2Book and order placement. */
+/** Spot or perpetual market. Drives asset id, price precision, and order side. */
+export type MarketType = "spot" | "perp";
+
+/** Max price decimals = MAX − szDecimals (8 for spot, 6 for perps). */
+const MAX_PRICE_DECIMALS: Record<MarketType, number> = { spot: 8, perp: 6 };
+/** Spot asset ids are offset; perp asset ids are the raw universe index. */
+const SPOT_ASSET_OFFSET = 10000;
+
+/** A tradable market (spot or perp), enriched with 24h context (§6.2). */
+export interface Market {
+  marketType: MarketType;
+  /** Coin string used for l2Book and (spot) order routing / mid lookup. */
   coin: string;
-  universeIndex: number;
-  /** Base token symbol shown to the user, e.g. "PURR". */
+  /** Exchange asset id: spot = 10000 + universe.index; perp = universe array index. */
+  assetId: number;
+  /** Display symbol, e.g. "PURR" (spot base) or "BTC" (perp). */
   tokenName: string;
-  tokenIndex: number;
-  /** Size decimals — order sizes must be rounded to this (used later in §6.3). */
   szDecimals: number;
-  tokenId: `0x${string}`;
+  /** Max decimal places allowed for this market's prices. */
+  priceMaxDecimals: number;
   midPx: number | null;
   dayNtlVlm: number;
   change24hPct: number | null;
   /** Volume-only tier for the list (cheap: no per-token order-book fetch). */
   volumeTier: LiquidityTier;
+  /** Perp only: maximum leverage the venue allows (we always trade 1x). */
+  maxLeverage?: number;
+}
+
+function priceMaxDecimals(marketType: MarketType, szDecimals: number): number {
+  return Math.max(0, MAX_PRICE_DECIMALS[marketType] - szDecimals);
+}
+
+function change24h(midPx: number | null, prevDayPx: number): number | null {
+  return midPx != null && prevDayPx > 0 ? ((midPx - prevDayPx) / prevDayPx) * 100 : null;
 }
 
 /**
  * All spot markets quoted in USDC, sorted by 24h volume descending.
- * Uses a single `spotMetaAndAssetCtxs` call; asset contexts align with the
- * universe by index.
+ * Asset contexts are NOT positionally aligned with the universe — match by the
+ * shared `coin` key (ctx.coin === universe.name). Spot asset id = 10000 + index.
  */
-export async function getSpotMarkets(): Promise<SpotMarket[]> {
+export async function getSpotMarkets(): Promise<Market[]> {
   const [meta, ctxs] = await getInfoClient().spotMetaAndAssetCtxs();
 
   const usdc = meta.tokens.find((t) => t.name === QUOTE_COIN);
   if (!usdc) return [];
 
-  // Asset contexts are NOT positionally aligned with the universe (their array
-  // lengths differ). Match by the shared `coin` key: ctx.coin === universe.name.
   const ctxByCoin = new Map(ctxs.map((c) => [c.coin, c]));
 
-  const markets: SpotMarket[] = [];
+  const markets: Market[] = [];
   meta.universe.forEach((u) => {
     const [baseIdx, quoteIdx] = u.tokens;
     if (quoteIdx !== usdc.index) return; // only USDC-quoted markets
@@ -52,27 +69,66 @@ export async function getSpotMarkets(): Promise<SpotMarket[]> {
 
     const ctx = ctxByCoin.get(u.name);
     const midPx = ctx?.midPx != null ? Number(ctx.midPx) : null;
-    const prevDayPx = ctx ? Number(ctx.prevDayPx) : 0;
     const dayNtlVlm = ctx ? Number(ctx.dayNtlVlm) : 0;
 
     markets.push({
+      marketType: "spot",
       coin: u.name,
-      universeIndex: u.index,
+      assetId: SPOT_ASSET_OFFSET + u.index,
       tokenName: base.name,
-      tokenIndex: base.index,
       szDecimals: base.szDecimals,
-      tokenId: base.tokenId,
+      priceMaxDecimals: priceMaxDecimals("spot", base.szDecimals),
       midPx,
       dayNtlVlm,
-      change24hPct:
-        midPx != null && prevDayPx > 0
-          ? ((midPx - prevDayPx) / prevDayPx) * 100
-          : null,
+      change24hPct: change24h(midPx, ctx ? Number(ctx.prevDayPx) : 0),
       volumeTier: volumeTier(dayNtlVlm),
     });
   });
 
   return markets.sort((a, b) => b.dayNtlVlm - a.dayNtlVlm);
+}
+
+/**
+ * All perpetual markets, sorted by 24h volume descending.
+ * Perp asset contexts ARE positionally aligned with `meta.universe`, and the
+ * perp asset id is that array index (0-based). Delisted markets are skipped.
+ */
+export async function getPerpMarkets(): Promise<Market[]> {
+  const [meta, ctxs] = await getInfoClient().metaAndAssetCtxs();
+
+  const markets: Market[] = [];
+  meta.universe.forEach((u, i) => {
+    if (u.isDelisted) return;
+    const ctx = ctxs[i];
+    const midPx =
+      ctx?.midPx != null
+        ? Number(ctx.midPx)
+        : ctx?.markPx != null
+          ? Number(ctx.markPx)
+          : null;
+    const dayNtlVlm = ctx ? Number(ctx.dayNtlVlm) : 0;
+
+    markets.push({
+      marketType: "perp",
+      coin: u.name,
+      assetId: i,
+      tokenName: u.name,
+      szDecimals: u.szDecimals,
+      priceMaxDecimals: priceMaxDecimals("perp", u.szDecimals),
+      midPx,
+      dayNtlVlm,
+      change24hPct: change24h(midPx, ctx ? Number(ctx.prevDayPx) : 0),
+      volumeTier: volumeTier(dayNtlVlm),
+      maxLeverage: u.maxLeverage,
+    });
+  });
+
+  return markets.sort((a, b) => b.dayNtlVlm - a.dayNtlVlm);
+}
+
+/** Fetch markets for the given type. */
+export function getMarkets(marketType: MarketType): Promise<Market[]> {
+  return marketType === "perp" ? getPerpMarkets() : getSpotMarkets();
 }
 
 /** Order-book-derived liquidity for a single market (spread + depth near mid). */

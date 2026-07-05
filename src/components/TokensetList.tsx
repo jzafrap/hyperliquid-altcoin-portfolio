@@ -1,5 +1,5 @@
 import type { Address } from "viem";
-import type { SpotMarket } from "../lib/markets";
+import type { Market } from "../lib/markets";
 import type { Tokenset } from "../lib/tokensets";
 import { BuyForm } from "./BuyForm";
 
@@ -16,7 +16,7 @@ export function TokensetList({
   onBought,
 }: {
   tokensets: Tokenset[];
-  markets: SpotMarket[];
+  markets: Market[];
   masterAddress: Address | undefined;
   agentApproved: boolean;
   onDelete: (id: string) => void;

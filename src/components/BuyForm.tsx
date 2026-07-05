@@ -3,7 +3,7 @@ import type { Address } from "viem";
 import { useUsdcBalance } from "../hooks/useUsdcBalance";
 import { executeBuy } from "../lib/execute";
 import { formatUsd } from "../lib/format";
-import type { SpotMarket } from "../lib/markets";
+import type { Market } from "../lib/markets";
 import { minTotalFor, planBuy } from "../lib/orders";
 import type { Tokenset } from "../lib/tokensets";
 
@@ -19,7 +19,7 @@ export function BuyForm({
   onBought,
 }: {
   tokenset: Tokenset;
-  markets: SpotMarket[];
+  markets: Market[];
   masterAddress: Address;
   agentApproved: boolean;
   onBought: () => void;
@@ -33,7 +33,7 @@ export function BuyForm({
   // Resolve the set's tokens to current markets, preserving basket order.
   const resolved = tokenset.tokens
     .map((t) => markets.find((m) => m.tokenName === t))
-    .filter((m): m is SpotMarket => m !== undefined);
+    .filter((m): m is Market => m !== undefined);
   const missing = tokenset.tokens.length - resolved.length;
 
   const minTotal = minTotalFor(tokenset.tokens.length);

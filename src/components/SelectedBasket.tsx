@@ -1,4 +1,4 @@
-import type { SpotMarket } from "../lib/markets";
+import type { Market } from "../lib/markets";
 import { TokenLiquidityDetail } from "./TokenLiquidityDetail";
 
 /**
@@ -10,8 +10,8 @@ export function SelectedBasket({
   markets,
   onRemove,
 }: {
-  markets: SpotMarket[];
-  onRemove: (market: SpotMarket) => void;
+  markets: Market[];
+  onRemove: (market: Market) => void;
 }) {
   if (markets.length === 0) {
     return (

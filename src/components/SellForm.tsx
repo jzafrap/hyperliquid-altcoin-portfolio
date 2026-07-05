@@ -3,7 +3,7 @@ import type { Address } from "viem";
 import { executeSell } from "../lib/execute";
 import { formatUsd } from "../lib/format";
 import type { BuyRecord } from "../lib/lots";
-import type { SpotMarket } from "../lib/markets";
+import type { Market } from "../lib/markets";
 
 const PERCENTAGES: { label: string; pct: number }[] = [
   { label: "25%", pct: 0.25 },
@@ -23,7 +23,7 @@ export function SellForm({
   onSold,
 }: {
   lot: BuyRecord;
-  markets: SpotMarket[];
+  markets: Market[];
   masterAddress: Address;
   agentApproved: boolean;
   onSold: () => void;
