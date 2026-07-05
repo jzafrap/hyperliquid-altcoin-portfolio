@@ -13,7 +13,7 @@ import { useSpotMarkets } from "./hooks/useSpotMarkets";
 import { useTokensets } from "./hooks/useTokensets";
 import { useUsdcBalance } from "./hooks/useUsdcBalance";
 import { ENV } from "./config/env";
-import type { SpotMarket } from "./lib/markets";
+import type { Market } from "./lib/markets";
 import type { NewTokenset } from "./lib/tokensets";
 
 function UsdcBalance() {
@@ -55,11 +55,11 @@ function ComposeTokenset({
   onCreate: (input: NewTokenset) => void;
 }) {
   // Selected markets keyed by token symbol; local to the compose step.
-  const [selected, setSelected] = useState<Map<string, SpotMarket>>(new Map());
+  const [selected, setSelected] = useState<Map<string, Market>>(new Map());
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const toggle = useCallback((market: SpotMarket) => {
+  const toggle = useCallback((market: Market) => {
     setSelected((prev) => {
       const next = new Map(prev);
       if (next.has(market.tokenName)) next.delete(market.tokenName);

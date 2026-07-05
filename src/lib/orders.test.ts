@@ -53,13 +53,13 @@ describe("toDecimalString", () => {
 
 describe("marketablePrice", () => {
   it("prices above mid for buys, below for sells", () => {
-    expect(marketablePrice(100, true, 2, 0.02)).toBeCloseTo(102);
-    expect(marketablePrice(100, false, 2, 0.02)).toBeCloseTo(98);
+    expect(marketablePrice(100, true, 6, 0.02)).toBeCloseTo(102);
+    expect(marketablePrice(100, false, 6, 0.02)).toBeCloseTo(98);
   });
   it("stays strictly marketable even with a coarse decimal cap (buy > mid)", () => {
-    // mid 0.012345, szDecimals 6 -> max 2 decimals; nearest rounding would give
-    // 0.01 (below mid) — ceil keeps the buy marketable.
-    const px = marketablePrice(0.012345, true, 6, 0.02);
+    // mid 0.012345, maxDecimals 2; nearest rounding would give 0.01 (below mid) —
+    // ceil keeps the buy marketable.
+    const px = marketablePrice(0.012345, true, 2, 0.02);
     expect(px).toBeGreaterThan(0.012345);
   });
 });
@@ -74,8 +74,9 @@ describe("minTotalFor", () => {
 const market = (over: Partial<BuyMarketInput> = {}): BuyMarketInput => ({
   tokenName: "TKN",
   coin: "@1",
-  universeIndex: 1,
+  assetId: 10001,
   szDecimals: 2,
+  priceMaxDecimals: 6,
   midPx: 10,
   ...over,
 });
@@ -138,7 +139,7 @@ describe("planBuy", () => {
 
 describe("buildBuyOrders", () => {
   it("builds IOC buy orders with correct asset id, decimal-string price and size", () => {
-    const plan = planBuy([market({ universeIndex: 5, midPx: 10, szDecimals: 2 })], 50);
+    const plan = planBuy([market({ assetId: 10005, midPx: 10, szDecimals: 2 })], 50);
     const orders = buildBuyOrders(plan);
     expect(orders).toHaveLength(1);
     expect(orders[0].a).toBe(10005);

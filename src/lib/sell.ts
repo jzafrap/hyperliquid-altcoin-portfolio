@@ -1,10 +1,9 @@
 import type { BuyRecord } from "./lots";
+import type { MarketType } from "./markets";
 import {
   marketablePrice,
   MIN_ORDER_NOTIONAL_USD,
-  priceMaxDecimals,
   roundSize,
-  spotAssetId,
   toDecimalString,
   type OrderObject,
 } from "./orders";
@@ -12,24 +11,29 @@ import {
 /**
  * Sell-order math (instructions.md §6.4). A sell always targets ONE lot and a
  * percentage of each leg's remaining quantity; it never touches another lot.
- * Pure and side-effect free — execution lives in execute.ts.
+ * For perps a "sell" closes the long, so orders are reduceOnly. Pure and
+ * side-effect free — execution lives in execute.ts.
  */
 
 const DUST_EPSILON = 1e-9;
 
-/** Current market data needed to price/size a sell leg, keyed by token symbol. */
+/** Current market data needed to price/size a sell leg (subset of `Market`). */
 export interface SellMarketInput {
   tokenName: string;
   coin: string;
-  universeIndex: number;
+  marketType: MarketType;
+  assetId: number;
   szDecimals: number;
+  priceMaxDecimals: number;
   midPx: number | null;
 }
 
 export interface SellLegPlan {
   token: string;
+  marketType: MarketType;
   assetId: number;
   szDecimals: number;
+  priceMaxDecimals: number;
   qtyRemaining: number;
   /** Quantity to sell for this leg (qtyRemaining × pct, rounded down). */
   sellQty: number;
@@ -74,12 +78,13 @@ export function planSell(
       const market = marketByToken.get(leg.token);
       const mid = market?.midPx ?? 0;
       const szDecimals = market?.szDecimals ?? 0;
-      const universeIndex = market?.universeIndex;
 
       const base: SellLegPlan = {
         token: leg.token,
-        assetId: universeIndex !== undefined ? spotAssetId(universeIndex) : leg.assetId,
+        marketType: market?.marketType ?? "spot",
+        assetId: market?.assetId ?? leg.assetId,
         szDecimals,
+        priceMaxDecimals: market?.priceMaxDecimals ?? 0,
         qtyRemaining: leg.qtyRemaining,
         sellQty: 0,
         mid,
@@ -93,7 +98,7 @@ export function planSell(
 
       const validPct = Number.isFinite(pct) && pct > 0 && pct <= 1 ? pct : 0;
       const sellQty = roundSize(leg.qtyRemaining * validPct, szDecimals);
-      const limitPrice = marketablePrice(mid, false, szDecimals, slippage);
+      const limitPrice = marketablePrice(mid, false, market.priceMaxDecimals, slippage);
       if (sellQty <= 0) {
         return { ...base, sellQty, limitPrice, reason: "rounds to zero" };
       }
@@ -121,16 +126,19 @@ export function planSell(
   };
 }
 
-/** Build IOC sell orders from the sellable legs of a plan. */
+/**
+ * Build IOC sell orders from the sellable legs of a plan. Perp sells close a long
+ * position, so they are `reduceOnly` (never flip into a short); spot sells are not.
+ */
 export function buildSellOrders(legs: SellLegPlan[]): OrderObject[] {
   return legs
     .filter((leg) => leg.sellable)
     .map((leg) => ({
       a: leg.assetId,
       b: false,
-      p: toDecimalString(leg.limitPrice, priceMaxDecimals(leg.szDecimals)),
+      p: toDecimalString(leg.limitPrice, leg.priceMaxDecimals),
       s: toDecimalString(leg.sellQty, leg.szDecimals),
-      r: false,
+      r: leg.marketType === "perp",
       t: { limit: { tif: "Ioc" } },
     }));
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Address } from "viem";
 import { formatPct, formatPrice, formatUsd } from "../lib/format";
 import type { BuyRecord } from "../lib/lots";
-import type { SpotMarket } from "../lib/markets";
+import type { Market } from "../lib/markets";
 import {
   aggregateTotals,
   computeLotPnl,
@@ -55,7 +55,7 @@ export function PortfolioDashboard({
   pricesError = false,
 }: {
   lots: BuyRecord[];
-  markets: SpotMarket[];
+  markets: Market[];
   masterAddress: Address | undefined;
   agentApproved: boolean;
   onSold: () => void;

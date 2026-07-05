@@ -21,9 +21,6 @@ export const MIN_ORDER_NOTIONAL_USD = 10;
 /** Default slippage bound for market-emulating IOC orders (fraction, 0.02 = 2%). */
 export const DEFAULT_SLIPPAGE = 0.02;
 
-/** Max decimal places for spot prices is (8 - szDecimals); prices also ≤5 sig figs. */
-const SPOT_PRICE_MAX_DECIMALS = 8;
-
 /** Tiny epsilon so exact-boundary notionals (e.g. $10.00) aren't rejected by FP noise. */
 const NOTIONAL_EPSILON = 1e-9;
 
@@ -55,28 +52,23 @@ export function roundSize(size: number, szDecimals: number): number {
   return Math.floor(size * factor + 1e-9) / factor;
 }
 
-/** Max decimal places allowed for a spot price given szDecimals. */
-export function priceMaxDecimals(szDecimals: number): number {
-  return Math.max(0, SPOT_PRICE_MAX_DECIMALS - szDecimals);
-}
-
 /**
  * Marketable limit price for an IOC order: above mid for buys (rounded UP),
  * below mid for sells (rounded DOWN), by the slippage bound. Directional
  * rounding guarantees the price stays on the marketable side of mid even when
- * the decimal cap is coarse. ≤5 significant figures and ≤(8-szDecimals) decimals.
+ * the decimal cap is coarse. ≤5 significant figures and ≤`maxDecimals` decimals
+ * (maxDecimals differs by market: 8−szDec for spot, 6−szDec for perp).
  */
 export function marketablePrice(
   mid: number,
   isBuy: boolean,
-  szDecimals: number,
+  maxDecimals: number,
   slippage = DEFAULT_SLIPPAGE,
 ): number {
   if (!(mid > 0)) return 0;
-  const maxDecimals = priceMaxDecimals(szDecimals);
   const raw = isBuy ? mid * (1 + slippage) : mid * (1 - slippage);
   const fiveSigFigs = Number(raw.toPrecision(5));
-  const factor = 10 ** maxDecimals;
+  const factor = 10 ** Math.max(0, maxDecimals);
   const rounded = isBuy
     ? Math.ceil(fiveSigFigs * factor) / factor
     : Math.floor(fiveSigFigs * factor) / factor;
@@ -88,12 +80,13 @@ export function minTotalFor(n: number): number {
   return MIN_ORDER_NOTIONAL_USD * n;
 }
 
-/** Market inputs needed to size a buy leg. */
+/** Market inputs needed to size a buy leg (subset of `Market`). */
 export interface BuyMarketInput {
   tokenName: string;
   coin: string;
-  universeIndex: number;
+  assetId: number;
   szDecimals: number;
+  priceMaxDecimals: number;
   midPx: number | null;
 }
 
@@ -102,6 +95,7 @@ export interface BuyLegPlan {
   coin: string;
   assetId: number;
   szDecimals: number;
+  priceMaxDecimals: number;
   /** Intended USDC for this leg (usdcTotal / n). */
   allocationUsd: number;
   /** Reference mid at plan time. */
@@ -165,14 +159,15 @@ export function planBuy(
   const perToken = n > 0 && Number.isFinite(usdcTotal) ? usdcTotal / n : 0;
   const legs: BuyLegPlan[] = markets.map((m) => {
     const mid = m.midPx ?? 0;
-    const limitPrice = marketablePrice(mid, true, m.szDecimals, slippage);
+    const limitPrice = marketablePrice(mid, true, m.priceMaxDecimals, slippage);
     // Size off the LIMIT price (worst case) so the fill can't exceed allocation.
     const size = limitPrice > 0 ? roundSize(perToken / limitPrice, m.szDecimals) : 0;
     return {
       tokenName: m.tokenName,
       coin: m.coin,
-      assetId: spotAssetId(m.universeIndex),
+      assetId: m.assetId,
       szDecimals: m.szDecimals,
+      priceMaxDecimals: m.priceMaxDecimals,
       allocationUsd: perToken,
       mid,
       limitPrice,
@@ -223,7 +218,7 @@ export function buildBuyOrders(plan: BuyPlan): OrderObject[] {
   return plan.legs.map((leg) => ({
     a: leg.assetId,
     b: true,
-    p: toDecimalString(leg.limitPrice, priceMaxDecimals(leg.szDecimals)),
+    p: toDecimalString(leg.limitPrice, leg.priceMaxDecimals),
     s: toDecimalString(leg.size, leg.szDecimals),
     r: false,
     t: { limit: { tif: "Ioc" } },

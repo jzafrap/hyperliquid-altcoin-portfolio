@@ -16,9 +16,20 @@ const lot: BuyRecord = {
   ],
 };
 
+const spotM = (over: Partial<SellMarketInput>): SellMarketInput => ({
+  tokenName: "A",
+  coin: "@1",
+  marketType: "spot",
+  assetId: 10001,
+  szDecimals: 2,
+  priceMaxDecimals: 6,
+  midPx: 12,
+  ...over,
+});
+
 const markets = new Map<string, SellMarketInput>([
-  ["A", { tokenName: "A", coin: "@1", universeIndex: 1, szDecimals: 2, midPx: 12 }],
-  ["B", { tokenName: "B", coin: "@2", universeIndex: 2, szDecimals: 2, midPx: 30 }],
+  ["A", spotM({ tokenName: "A", coin: "@1", assetId: 10001, midPx: 12 })],
+  ["B", spotM({ tokenName: "B", coin: "@2", assetId: 10002, midPx: 30 })],
 ]);
 
 describe("planSell", () => {
@@ -79,5 +90,22 @@ describe("buildSellOrders", () => {
     expect(orders[0].b).toBe(false);
     expect(orders[0].t).toEqual({ limit: { tif: "Ioc" } });
     expect(orders[0].s).toBe("5");
+    expect(orders[0].r).toBe(false); // spot sell is not reduceOnly
+  });
+
+  it("marks perp sells as reduceOnly (closing a long)", () => {
+    const perpMarket: SellMarketInput = {
+      tokenName: "A",
+      coin: "A",
+      marketType: "perp",
+      assetId: 3,
+      szDecimals: 2,
+      priceMaxDecimals: 4,
+      midPx: 12,
+    };
+    const plan = planSell(lot, 1, new Map([["A", perpMarket]]));
+    const orders = buildSellOrders(plan.legs);
+    expect(orders[0].a).toBe(3);
+    expect(orders[0].r).toBe(true); // perp sell = reduceOnly
   });
 });

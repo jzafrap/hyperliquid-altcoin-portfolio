@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useSpotMarkets } from "../hooks/useSpotMarkets";
 import { formatPct, formatPrice, formatUsdCompact } from "../lib/format";
-import type { SpotMarket } from "../lib/markets";
+import type { Market } from "../lib/markets";
 import { LiquidityBadge } from "./LiquidityBadge";
 
 const MAX_ROWS = 80;
@@ -16,7 +16,7 @@ export function TokenPicker({
   onToggle,
 }: {
   selected: Set<string>;
-  onToggle: (market: SpotMarket) => void;
+  onToggle: (market: Market) => void;
 }) {
   const { data: markets, isLoading, isError, error } = useSpotMarkets();
   const [query, setQuery] = useState("");

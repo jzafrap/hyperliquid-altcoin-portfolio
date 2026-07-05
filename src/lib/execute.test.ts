@@ -14,7 +14,7 @@ import type { SellMarketInput } from "./sell";
 const MASTER = "0x1111111111111111111111111111111111111111" as const;
 
 const markets: BuyMarketInput[] = [
-  { tokenName: "A", coin: "@1", universeIndex: 1, szDecimals: 2, midPx: 10 },
+  { tokenName: "A", coin: "@1", assetId: 10001, szDecimals: 2, priceMaxDecimals: 6, midPx: 10 },
 ];
 
 function mockOrder(statuses: unknown[]) {
@@ -126,7 +126,7 @@ describe("executeBuy", () => {
 });
 
 const sellMarkets: SellMarketInput[] = [
-  { tokenName: "A", coin: "@1", universeIndex: 1, szDecimals: 2, midPx: 12 },
+  { tokenName: "A", coin: "@1", marketType: "spot", assetId: 10001, szDecimals: 2, priceMaxDecimals: 6, midPx: 12 },
 ];
 
 function seedLot(): BuyRecord {
@@ -218,7 +218,7 @@ describe("executeSell", () => {
       masterAddress: MASTER,
       lot,
       pct: 1,
-      markets: [{ tokenName: "A", coin: "@1", universeIndex: 1, szDecimals: 2, midPx: 25 }],
+      markets: [{ tokenName: "A", coin: "@1", marketType: "spot", assetId: 10001, szDecimals: 2, priceMaxDecimals: 6, midPx: 25 }],
     });
     expect(res.lot.status).toBe("closed");
     expect(res.lot.legs[0].qtyRemaining).toBe(0);
