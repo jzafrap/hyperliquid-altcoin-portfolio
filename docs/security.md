@@ -54,7 +54,8 @@ Additional hardening from adversarial review:
   changed mid-approval.
 - De-duplicate concurrent approvals; short-circuit if already approved.
 - The agent client is narrowed to a **trade-only** surface (`order`, `cancel`,
-  `cancelByCloid`) — no withdrawal/transfer methods are reachable through it.
+  `cancelByCloid`, and `updateLeverage` for perp 1x) — no withdrawal/transfer
+  methods are reachable through it.
 
 ## Money-safety in trading
 

@@ -59,6 +59,21 @@ names like `@N` always satisfy `N === index`.
 - **Minimum order value** ≈ **$10** notional. Treated as a tunable constant;
   **verify against live docs before mainnet.**
 
+## Perpetuals
+
+- `info.metaAndAssetCtxs()` returns `[meta, assetCtxs]`; for perps the **contexts
+  ARE positionally aligned** with `meta.universe` (unlike spot).
+- **Perp asset id = the universe array index** (0-based). There is no `.index`
+  field on perp universe entries. Verified: `BTC` at array index 3 → asset id 3.
+- Perp price decimals = **`6 − szDecimals`** (spot is `8 − szDecimals`).
+- **Margin** for perps is `clearinghouseState.withdrawable` (perp account),
+  separate from the spot USDC balance. Positions are in `assetPositions[]` with
+  `szi`, `entryPx`, `unrealizedPnl` (includes funding), `cumFunding`.
+- **Leverage**: `exchangeClient.updateLeverage({ asset, isCross, leverage })`.
+  This app forces `leverage: 1`, `isCross: true` before opening.
+- **Open long** = buy order (`b:true`, `r:false`); **close** = `reduceOnly`
+  (`r:true`) order in the opposite direction. Positions **net** per asset.
+
 ## Agent (API) wallet
 
 - Approve via `ExchangeClient.approveAgent({ agentAddress, agentName })`. The SDK

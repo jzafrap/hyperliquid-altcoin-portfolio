@@ -10,18 +10,17 @@ is enforced in code and covered by tests.
   Hyperliquid, outside this app.
 - An **approved agent** must be active (see [Security](./security.md)).
 
-## Spot asset identity
+## Asset identity (spot vs perp)
 
-Hyperliquid spot orders reference an asset by a numeric id:
+Hyperliquid orders reference an asset by a numeric id, computed differently per market:
 
-```
-assetId = 10000 + universeIndex
-```
+| Market | Asset id | Price decimals |
+|--------|----------|----------------|
+| Spot | `10000 + universe.index` (the `.index` field, not array position) | `8 − szDecimals` |
+| Perp | universe **array index** (0-based; no `.index` field) | `6 − szDecimals` |
 
-`universeIndex` is the `index` field of the spot pair in `spotMeta.universe` — **not**
-its array position (those differ for most pairs). Verified against testnet:
-`PURR/USDC` → `10000`, `@1` → `10001`. See
-[Hyperliquid Reference](./hyperliquid-reference.md).
+Verified against testnet: spot `PURR/USDC` → `10000`, `@1` → `10001`; perp `BTC` →
+its array index. See [Hyperliquid Reference](./hyperliquid-reference.md).
 
 ## Buying (equal split)
 
@@ -62,6 +61,26 @@ Lot status after a sell:
 
 - `partially_sold` — some quantity remains.
 - `closed` — nothing remains across all legs.
+
+## Perpetuals (1x)
+
+Perps reuse the spot flow with these differences:
+
+| Aspect | Perp behavior |
+|--------|---------------|
+| Buy | Opens a **1x long**. Before ordering, leverage is set to **1x cross** per asset (`updateLeverage`); if that fails, the buy aborts before any order. |
+| Sell | Closes the long with **`reduceOnly`** orders — a "sell" can never flip into a short. |
+| Funds | Checked against the **perp account withdrawable** margin, not spot USDC. At 1x, notional ≈ margin. |
+| Storage | Perp tokensets/lots are namespaced separately from spot; a lot records its `marketType` and can't be sold on the wrong market. |
+
+**Caveats (see also `instructions.md` §8.2):**
+
+- **Positions net on-exchange.** Hyperliquid keeps one netted position per perp
+  asset; multiple app "lots" are an accounting layer over that single position.
+- **Funding is not modeled.** P&L is mark-vs-entry; funding accrues on the real
+  position but isn't shown. The authoritative value is on Hyperliquid.
+- **No pre-trade reconciliation.** A buy doesn't check for an existing position on
+  that asset (opened elsewhere or from lost local storage).
 
 ## Price and size formatting
 
