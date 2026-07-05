@@ -15,12 +15,13 @@ describe("env config", () => {
 });
 
 describe("storageNamespace", () => {
-  it("scopes the key by network and lowercased wallet", () => {
-    const ns = storageNamespace("0xAbC123");
-    expect(ns).toBe(`hl-tokensets:${ENV.network}:0xabc123`);
+  it("scopes the key by network, market type, and lowercased wallet", () => {
+    const ns = storageNamespace("0xAbC123", "spot");
+    expect(ns).toBe(`hl-tokensets:${ENV.network}:spot:0xabc123`);
   });
 
-  it("produces distinct keys for distinct wallets", () => {
-    expect(storageNamespace("0xaaa")).not.toBe(storageNamespace("0xbbb"));
+  it("produces distinct keys for distinct wallets and market types", () => {
+    expect(storageNamespace("0xaaa", "spot")).not.toBe(storageNamespace("0xbbb", "spot"));
+    expect(storageNamespace("0xaaa", "spot")).not.toBe(storageNamespace("0xaaa", "perp"));
   });
 });

@@ -187,14 +187,15 @@ describe("lots persistence", () => {
   const wallet = "0xABC";
   beforeEach(() => localStorage.clear());
 
-  it("round-trips and prepends lots, scoped per wallet", () => {
+  it("round-trips and prepends lots, scoped per wallet and market type", () => {
     const rec: BuyRecord = makeBuyRecord(
       { tokensetId: "ts1", tokensetName: "Set", wallet, legs: [] },
       "lot1",
       1,
     );
-    saveLots(wallet, addLot(loadLots(wallet), rec));
-    expect(loadLots(wallet)).toHaveLength(1);
-    expect(loadLots("0xother")).toEqual([]);
+    saveLots(wallet, "spot", addLot(loadLots(wallet, "spot"), rec));
+    expect(loadLots(wallet, "spot")).toHaveLength(1);
+    expect(loadLots("0xother", "spot")).toEqual([]);
+    expect(loadLots(wallet, "perp")).toEqual([]);
   });
 });

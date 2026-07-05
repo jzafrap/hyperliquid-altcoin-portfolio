@@ -584,3 +584,29 @@ a:hover {
 .toggle input {
   cursor: pointer;
 }
+
+/* Market type tabs */
+.market-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 1rem;
+}
+
+.market-tab {
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  border-radius: 7px;
+  padding: 0.4rem 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.market-tab.active {
+  background: var(--accent);
+  color: #06210f;
+}

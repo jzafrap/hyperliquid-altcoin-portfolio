@@ -1,24 +1,26 @@
 import { useMemo, useState } from "react";
-import { useSpotMarkets } from "../hooks/useSpotMarkets";
+import { useMarkets } from "../hooks/useMarkets";
 import { formatPct, formatPrice, formatUsdCompact } from "../lib/format";
-import type { Market } from "../lib/markets";
+import type { Market, MarketType } from "../lib/markets";
 import { LiquidityBadge } from "./LiquidityBadge";
 
 const MAX_ROWS = 80;
 
 /**
- * Searchable list of USDC-quoted spot tokens with liquidity indicators, for
+ * Searchable list of tokens (spot or perp) with liquidity indicators, for
  * composing a tokenset (instructions.md §6.2). Selection is controlled by the
- * parent so tokenset persistence (§6.3, slice 3) can own the state.
+ * parent so tokenset persistence (§6.3) can own the state.
  */
 export function TokenPicker({
+  marketType,
   selected,
   onToggle,
 }: {
+  marketType: MarketType;
   selected: Set<string>;
   onToggle: (market: Market) => void;
 }) {
-  const { data: markets, isLoading, isError, error } = useSpotMarkets();
+  const { data: markets, isLoading, isError, error } = useMarkets(marketType);
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {

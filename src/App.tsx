@@ -1,35 +1,36 @@
 import { useCallback, useState } from "react";
 import { useAccount } from "wagmi";
+import { useMarketType } from "./app/marketType";
 import { AgentApproval } from "./components/AgentApproval";
+import { MarketTypeTabs } from "./components/MarketTypeTabs";
 import { NetworkBanner } from "./components/NetworkBanner";
 import { PortfolioDashboard } from "./components/PortfolioDashboard";
 import { SelectedBasket } from "./components/SelectedBasket";
 import { TokenPicker } from "./components/TokenPicker";
 import { TokensetList } from "./components/TokensetList";
 import { WalletConnect } from "./components/WalletConnect";
-import { useAgent } from "./hooks/useAgent";
-import { useLots } from "./hooks/useLots";
-import { useSpotMarkets } from "./hooks/useSpotMarkets";
-import { useTokensets } from "./hooks/useTokensets";
-import { useUsdcBalance } from "./hooks/useUsdcBalance";
 import { ENV } from "./config/env";
-import type { Market } from "./lib/markets";
+import { useAgent } from "./hooks/useAgent";
+import { useAvailableFunds } from "./hooks/useAvailableFunds";
+import { useLots } from "./hooks/useLots";
+import { useMarkets } from "./hooks/useMarkets";
+import { useTokensets } from "./hooks/useTokensets";
+import type { Market, MarketType } from "./lib/markets";
 import type { NewTokenset } from "./lib/tokensets";
 
-function UsdcBalance() {
+function FundsBalance({ marketType }: { marketType: MarketType }) {
   const { address } = useAccount();
-  const { data, isLoading, isError, error } = useUsdcBalance(address);
+  const { data, isLoading, isError, error } = useAvailableFunds(address, marketType);
+  const label = marketType === "perp" ? "Perp margin (USDC)" : "Spot USDC";
 
   if (!address) return null;
-  if (isLoading) return <p className="muted">Loading USDC balance…</p>;
-  if (isError) {
-    return <p className="error">Failed to load balance: {String(error)}</p>;
-  }
+  if (isLoading) return <p className="muted">Loading balance…</p>;
+  if (isError) return <p className="error">Failed to load balance: {String(error)}</p>;
 
   return (
     <div className="usdc-balance-row">
       <div className="usdc-balance">
-        <span className="label">Spot USDC</span>
+        <span className="label">{label}</span>
         <span className="value">
           {data?.toLocaleString(undefined, {
             minimumFractionDigits: 2,
@@ -39,9 +40,10 @@ function UsdcBalance() {
       </div>
       {data !== undefined && data <= 0 && (
         <p className="muted small">
-          No USDC in your Hyperliquid spot balance yet.{" "}
+          No {marketType === "perp" ? "perp margin" : "USDC"} available yet.{" "}
           <a href={ENV.webAppUrl} target="_blank" rel="noreferrer">
-            Deposit on Hyperliquid ({ENV.label}) →
+            {marketType === "perp" ? "Deposit / transfer to perps" : "Deposit"} on
+            Hyperliquid ({ENV.label}) →
           </a>
         </p>
       )}
@@ -50,8 +52,10 @@ function UsdcBalance() {
 }
 
 function ComposeTokenset({
+  marketType,
   onCreate,
 }: {
+  marketType: MarketType;
   onCreate: (input: NewTokenset) => void;
 }) {
   // Selected markets keyed by token symbol; local to the compose step.
@@ -87,7 +91,11 @@ function ComposeTokenset({
     <section className="compose">
       <div className="compose-col">
         <h2>Tokens</h2>
-        <TokenPicker selected={new Set(selected.keys())} onToggle={toggle} />
+        <TokenPicker
+          marketType={marketType}
+          selected={new Set(selected.keys())}
+          onToggle={toggle}
+        />
       </div>
       <div className="compose-col">
         <h2>New tokenset</h2>
@@ -115,15 +123,18 @@ function ComposeTokenset({
 
 export default function App() {
   const { address, isConnected } = useAccount();
-  const { tokensets, create, remove } = useTokensets(address);
+  const { marketType } = useMarketType();
+  const { tokensets, create, remove } = useTokensets(address, marketType);
   const { isApproved } = useAgent();
   const {
     data: markets = [],
     dataUpdatedAt: pricesUpdatedAt,
     isError: pricesError,
     isLoading: marketsLoading,
-  } = useSpotMarkets();
-  const { lots, refresh: refreshLots } = useLots(address);
+  } = useMarkets(marketType);
+  const { lots, refresh: refreshLots } = useLots(address, marketType);
+
+  const marketLabel = marketType === "perp" ? "perp" : "spot";
 
   return (
     <div className="app">
@@ -136,10 +147,12 @@ export default function App() {
       </header>
 
       <main className="app-main">
+        <MarketTypeTabs />
+
         {isConnected ? (
           <>
             <section className="panel">
-              <UsdcBalance />
+              <FundsBalance marketType={marketType} />
             </section>
 
             <section className="panel">
@@ -147,21 +160,22 @@ export default function App() {
             </section>
 
             {marketsLoading && (
-              <p className="muted small">Loading Hyperliquid spot markets…</p>
+              <p className="muted small">Loading Hyperliquid {marketLabel} markets…</p>
             )}
             {pricesError && !marketsLoading && (
               <p className="error small">
-                Couldn't load spot markets — check your connection and retry.
+                Couldn't load {marketLabel} markets — check your connection and retry.
               </p>
             )}
 
-            <ComposeTokenset onCreate={create} />
+            <ComposeTokenset marketType={marketType} onCreate={create} />
 
             <section className="panel">
               <h2>Your tokensets</h2>
               <TokensetList
                 tokensets={tokensets}
                 markets={markets}
+                marketType={marketType}
                 masterAddress={address}
                 agentApproved={isApproved}
                 onDelete={remove}
@@ -174,6 +188,7 @@ export default function App() {
               <PortfolioDashboard
                 lots={lots}
                 markets={markets}
+                marketType={marketType}
                 masterAddress={address}
                 agentApproved={isApproved}
                 onSold={refreshLots}

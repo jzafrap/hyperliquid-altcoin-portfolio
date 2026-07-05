@@ -17,11 +17,15 @@ const markets: BuyMarketInput[] = [
   { tokenName: "A", coin: "@1", assetId: 10001, szDecimals: 2, priceMaxDecimals: 6, midPx: 10 },
 ];
 
+let updateLeverageMock: ReturnType<typeof vi.fn>;
+
 function mockOrder(statuses: unknown[]) {
+  updateLeverageMock = vi.fn().mockResolvedValue({ status: "ok" });
   (getAgentExchangeClient as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
     order: vi.fn().mockResolvedValue({
       response: { data: { statuses } },
     }),
+    updateLeverage: updateLeverageMock,
   });
 }
 
@@ -35,6 +39,7 @@ describe("executeBuy", () => {
     mockOrder([{ filled: { totalSz: "1.96", avgPx: "10.1", oid: 1 } }]);
     const res = await executeBuy({
       masterAddress: MASTER,
+        marketType: "spot",
       tokensetId: "ts1",
       tokensetName: "Set",
       markets,
@@ -43,7 +48,32 @@ describe("executeBuy", () => {
     expect(res.partial).toBe(false);
     expect(res.persisted).toBe(true);
     expect(res.record.legs[0].qtyBought).toBe(1.96);
-    expect(loadLots(MASTER)).toHaveLength(1);
+    expect(loadLots(MASTER, "spot")).toHaveLength(1);
+    expect(updateLeverageMock).not.toHaveBeenCalled(); // spot never sets leverage
+  });
+
+  it("sets 1x leverage per asset before opening a perp buy", async () => {
+    mockOrder([{ filled: { totalSz: "0.0098", avgPx: "60500", oid: 1 } }]);
+    const perpMarkets: BuyMarketInput[] = [
+      { tokenName: "BTC", coin: "BTC", assetId: 3, szDecimals: 5, priceMaxDecimals: 1, midPx: 60000 },
+    ];
+    const res = await executeBuy({
+      masterAddress: MASTER,
+      marketType: "perp",
+      tokensetId: "ts1",
+      tokensetName: "Perps",
+      markets: perpMarkets,
+      usdcTotal: 600,
+    });
+    expect(updateLeverageMock).toHaveBeenCalledWith({
+      asset: 3,
+      isCross: true,
+      leverage: 1,
+    });
+    expect(res.persisted).toBe(true);
+    // Perp lot is stored under the perp namespace, separate from spot.
+    expect(loadLots(MASTER, "perp")).toHaveLength(1);
+    expect(loadLots(MASTER, "spot")).toHaveLength(0);
   });
 
   it("throws before recording when nothing fills (safe to retry)", async () => {
@@ -51,13 +81,14 @@ describe("executeBuy", () => {
     await expect(
       executeBuy({
         masterAddress: MASTER,
+        marketType: "spot",
         tokensetId: "ts1",
         tokensetName: "Set",
         markets,
         usdcTotal: 20,
       }),
     ).rejects.toThrow(/did not fill/i);
-    expect(loadLots(MASTER)).toHaveLength(0);
+    expect(loadLots(MASTER, "spot")).toHaveLength(0);
   });
 
   it("throws on an invalid plan before touching the exchange", async () => {
@@ -65,6 +96,7 @@ describe("executeBuy", () => {
     await expect(
       executeBuy({
         masterAddress: MASTER,
+        marketType: "spot",
         tokensetId: "ts1",
         tokensetName: "Set",
         markets,
@@ -79,6 +111,7 @@ describe("executeBuy", () => {
     await expect(
       executeBuy({
         masterAddress: MASTER,
+        marketType: "spot",
         tokensetId: "ts1",
         tokensetName: "Set",
         markets,
@@ -94,6 +127,7 @@ describe("executeBuy", () => {
     mockOrder([{ filled: { totalSz: "1.0", avgPx: "10.1", oid: 1 } }]);
     const res = await executeBuy({
       masterAddress: MASTER,
+        marketType: "spot",
       tokensetId: "ts1",
       tokensetName: "Set",
       markets,
@@ -112,6 +146,7 @@ describe("executeBuy", () => {
     try {
       const res = await executeBuy({
         masterAddress: MASTER,
+        marketType: "spot",
         tokensetId: "ts1",
         tokensetName: "Set",
         markets,
@@ -142,7 +177,7 @@ function seedLot(): BuyRecord {
       { token: "A", assetId: 10001, usdcAllocated: 50, qtyBought: 5, avgEntryPrice: 10, qtyRemaining: 5 },
     ],
   };
-  saveLots(MASTER, [lot]);
+  saveLots(MASTER, "spot", [lot]);
   return lot;
 }
 
@@ -155,12 +190,13 @@ describe("executeSell", () => {
   it("sells, updates the lot, and returns realized P&L", async () => {
     const lot = seedLot();
     mockOrder([{ filled: { totalSz: "2.5", avgPx: "12", oid: 9 } }]);
-    const res = await executeSell({ masterAddress: MASTER, lot, pct: 0.5, markets: sellMarkets });
+    const res = await executeSell({ masterAddress: MASTER,
+        marketType: "spot", lot, pct: 0.5, markets: sellMarkets });
     expect(res.realizedPnlUsd).toBe(5); // 2.5 * (12 - 10)
     expect(res.partial).toBe(false);
     expect(res.persisted).toBe(true);
     // Persisted lot reflects reduced remaining + partially_sold.
-    const stored = loadLots(MASTER)[0];
+    const stored = loadLots(MASTER, "spot")[0];
     expect(stored.legs[0].qtyRemaining).toBe(2.5);
     expect(stored.status).toBe("partially_sold");
   });
@@ -169,16 +205,18 @@ describe("executeSell", () => {
     const lot = seedLot();
     mockOrder([{ error: "no liquidity" }]);
     await expect(
-      executeSell({ masterAddress: MASTER, lot, pct: 1, markets: sellMarkets }),
+      executeSell({ masterAddress: MASTER,
+        marketType: "spot", lot, pct: 1, markets: sellMarkets }),
     ).rejects.toThrow(/did not fill/i);
     // Lot unchanged.
-    expect(loadLots(MASTER)[0].status).toBe("open");
+    expect(loadLots(MASTER, "spot")[0].status).toBe("open");
   });
 
   it("throws on an invalid plan before hitting the exchange", async () => {
     const lot = seedLot();
     await expect(
-      executeSell({ masterAddress: MASTER, lot, pct: 2, markets: sellMarkets }),
+      executeSell({ masterAddress: MASTER,
+        marketType: "spot", lot, pct: 2, markets: sellMarkets }),
     ).rejects.toThrow();
     expect(getAgentExchangeClient).not.toHaveBeenCalled();
   });
@@ -193,6 +231,7 @@ describe("executeSell", () => {
     try {
       const res = await executeSell({
         masterAddress: MASTER,
+        marketType: "spot",
         lot,
         pct: 0.5,
         markets: sellMarkets,
@@ -211,17 +250,18 @@ describe("executeSell", () => {
         { token: "A", assetId: 10001, usdcAllocated: 50, qtyBought: 0.58, avgEntryPrice: 10, qtyRemaining: 0.58 },
       ],
     };
-    saveLots(MASTER, [lot]);
+    saveLots(MASTER, "spot", [lot]);
     // Sell 100%: sellQty must be 0.58 (not 0.57 via float truncation).
     mockOrder([{ filled: { totalSz: "0.58", avgPx: "11", oid: 1 } }]);
     const res = await executeSell({
       masterAddress: MASTER,
+        marketType: "spot",
       lot,
       pct: 1,
       markets: [{ tokenName: "A", coin: "@1", marketType: "spot", assetId: 10001, szDecimals: 2, priceMaxDecimals: 6, midPx: 25 }],
     });
     expect(res.lot.status).toBe("closed");
     expect(res.lot.legs[0].qtyRemaining).toBe(0);
-    expect(loadLots(MASTER)[0].status).toBe("closed");
+    expect(loadLots(MASTER, "spot")[0].status).toBe("closed");
   });
 });

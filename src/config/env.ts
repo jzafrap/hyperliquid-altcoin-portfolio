@@ -58,7 +58,10 @@ const CONFIGS: Record<HlNetwork, NetworkConfig> = {
 
 export const ENV: NetworkConfig = CONFIGS[resolveNetwork()];
 
-/** Namespace for persisted data, scoped by network (instructions.md §5). */
-export function storageNamespace(wallet: string): string {
-  return `hl-tokensets:${ENV.network}:${wallet.toLowerCase()}`;
+/**
+ * Namespace for persisted data, scoped by network, market type, and wallet
+ * (instructions.md §5). Spot and perp tokensets/lots never mix.
+ */
+export function storageNamespace(wallet: string, marketType: string): string {
+  return `hl-tokensets:${ENV.network}:${marketType}:${wallet.toLowerCase()}`;
 }

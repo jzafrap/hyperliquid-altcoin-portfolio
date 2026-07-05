@@ -3,7 +3,7 @@ import type { Address } from "viem";
 import { executeSell } from "../lib/execute";
 import { formatUsd } from "../lib/format";
 import type { BuyRecord } from "../lib/lots";
-import type { Market } from "../lib/markets";
+import type { Market, MarketType } from "../lib/markets";
 
 const PERCENTAGES: { label: string; pct: number }[] = [
   { label: "25%", pct: 0.25 },
@@ -13,17 +13,20 @@ const PERCENTAGES: { label: string; pct: number }[] = [
 
 /**
  * Sell controls for a single lot (§6.4): sell 25/50/100% of each leg's remaining
- * quantity. Acts on this lot alone. Requires an approved agent.
+ * quantity. Acts on this lot alone. Requires an approved agent. For perps this
+ * closes the long via reduceOnly orders.
  */
 export function SellForm({
   lot,
   markets,
+  marketType,
   masterAddress,
   agentApproved,
   onSold,
 }: {
   lot: BuyRecord;
   markets: Market[];
+  marketType: MarketType;
   masterAddress: Address;
   agentApproved: boolean;
   onSold: () => void;
@@ -42,7 +45,7 @@ export function SellForm({
     setError(null);
     setMessage(null);
     try {
-      const res = await executeSell({ masterAddress, lot, pct, markets });
+      const res = await executeSell({ masterAddress, marketType, lot, pct, markets });
       const pnl = res.realizedPnlUsd;
       const pnlText = `${pnl >= 0 ? "+" : ""}${formatUsd(pnl)}`;
       if (!res.persisted) {

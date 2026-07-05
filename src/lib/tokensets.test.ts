@@ -84,24 +84,28 @@ describe("persistence (localStorage)", () => {
   beforeEach(() => localStorage.clear());
 
   it("returns an empty list when nothing is stored", () => {
-    expect(loadTokensets(wallet)).toEqual([]);
+    expect(loadTokensets(wallet, "spot")).toEqual([]);
   });
 
   it("round-trips saved tokensets", () => {
     const list = [sample({ id: "a", name: "A" })];
-    saveTokensets(wallet, list);
-    expect(loadTokensets(wallet)).toEqual(list);
+    saveTokensets(wallet, "spot", list);
+    expect(loadTokensets(wallet, "spot")).toEqual(list);
   });
 
-  it("scopes storage per wallet (lowercased)", () => {
-    saveTokensets(wallet, [sample()]);
-    // Different wallet sees nothing; same wallet in a different case sees it.
-    expect(loadTokensets("0xdef")).toEqual([]);
-    expect(loadTokensets("0xabc")).toHaveLength(1);
+  it("scopes storage per wallet and market type", () => {
+    saveTokensets(wallet, "spot", [sample()]);
+    // Different wallet / market type sees nothing; same wallet+type sees it.
+    expect(loadTokensets("0xdef", "spot")).toEqual([]);
+    expect(loadTokensets(wallet, "perp")).toEqual([]);
+    expect(loadTokensets("0xabc", "spot")).toHaveLength(1);
   });
 
   it("recovers from corrupt storage without throwing", () => {
-    localStorage.setItem(`hl-tokensets:testnet:${wallet.toLowerCase()}:tokensets`, "{bad json");
-    expect(loadTokensets(wallet)).toEqual([]);
+    localStorage.setItem(
+      `hl-tokensets:testnet:spot:${wallet.toLowerCase()}:tokensets`,
+      "{bad json",
+    );
+    expect(loadTokensets(wallet, "spot")).toEqual([]);
   });
 });

@@ -1,5 +1,6 @@
 import type { Address } from "viem";
 import { getInfoClient } from "./hyperliquid";
+import type { MarketType } from "./markets";
 
 /** The quote asset used across the app for spot buys/sells (instructions.md §2). */
 export const QUOTE_COIN = "USDC";
@@ -37,4 +38,26 @@ export async function getUsdcSpotBalance(user: Address): Promise<number> {
   const balances = await getSpotBalances(user);
   const usdc = balances.find((b) => b.coin === QUOTE_COIN);
   return usdc ? Number(usdc.total) : 0;
+}
+
+/**
+ * Withdrawable USDC margin in the user's perp account. This is the spendable
+ * amount for perp buys (opening 1x longs), separate from the spot USDC balance.
+ */
+export async function getPerpWithdrawable(user: Address): Promise<number> {
+  const state = await getInfoClient().clearinghouseState({ user });
+  return Number(state.withdrawable);
+}
+
+/**
+ * Available funds for the given market: spot USDC balance for spot, perp account
+ * withdrawable margin for perps. Used by the buy flow's insufficient-funds guard.
+ */
+export function getAvailableFunds(
+  user: Address,
+  marketType: MarketType,
+): Promise<number> {
+  return marketType === "perp"
+    ? getPerpWithdrawable(user)
+    : getUsdcSpotBalance(user);
 }

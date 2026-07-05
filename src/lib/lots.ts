@@ -1,4 +1,5 @@
 import { storageNamespace } from "../config/env";
+import type { MarketType } from "./markets";
 import type { BuyPlan } from "./orders";
 
 /**
@@ -124,13 +125,13 @@ export function anyLegFilled(legs: BuyLeg[]): boolean {
 
 // --- Persistence (localStorage, network+wallet scoped) ---------------------
 
-function storageKey(wallet: string): string {
-  return `${storageNamespace(wallet)}:lots`;
+function storageKey(wallet: string, marketType: MarketType): string {
+  return `${storageNamespace(wallet, marketType)}:lots`;
 }
 
-export function loadLots(wallet: string): BuyRecord[] {
+export function loadLots(wallet: string, marketType: MarketType): BuyRecord[] {
   try {
-    const raw = localStorage.getItem(storageKey(wallet));
+    const raw = localStorage.getItem(storageKey(wallet, marketType));
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     return Array.isArray(parsed) ? (parsed as BuyRecord[]) : [];
@@ -143,8 +144,12 @@ export function loadLots(wallet: string): BuyRecord[] {
  * Persist lots. Throws on failure (quota/unavailable) — the caller MUST surface
  * this, because a filled buy whose lot is not saved becomes untracked money.
  */
-export function saveLots(wallet: string, lots: BuyRecord[]): void {
-  localStorage.setItem(storageKey(wallet), JSON.stringify(lots));
+export function saveLots(
+  wallet: string,
+  marketType: MarketType,
+  lots: BuyRecord[],
+): void {
+  localStorage.setItem(storageKey(wallet, marketType), JSON.stringify(lots));
 }
 
 export function addLot(lots: BuyRecord[], lot: BuyRecord): BuyRecord[] {

@@ -1,4 +1,5 @@
 import { storageNamespace } from "../config/env";
+import type { MarketType } from "./markets";
 
 /**
  * Tokenset definitions and their persistence (instructions.md §5, §6.2).
@@ -66,13 +67,13 @@ export function removeTokenset(list: Tokenset[], id: string): Tokenset[] {
 
 // --- Persistence (localStorage, network+wallet scoped) ---------------------
 
-function storageKey(wallet: string): string {
-  return `${storageNamespace(wallet)}:tokensets`;
+function storageKey(wallet: string, marketType: MarketType): string {
+  return `${storageNamespace(wallet, marketType)}:tokensets`;
 }
 
-export function loadTokensets(wallet: string): Tokenset[] {
+export function loadTokensets(wallet: string, marketType: MarketType): Tokenset[] {
   try {
-    const raw = localStorage.getItem(storageKey(wallet));
+    const raw = localStorage.getItem(storageKey(wallet, marketType));
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     return Array.isArray(parsed) ? (parsed as Tokenset[]) : [];
@@ -81,9 +82,13 @@ export function loadTokensets(wallet: string): Tokenset[] {
   }
 }
 
-export function saveTokensets(wallet: string, list: Tokenset[]): void {
+export function saveTokensets(
+  wallet: string,
+  marketType: MarketType,
+  list: Tokenset[],
+): void {
   try {
-    localStorage.setItem(storageKey(wallet), JSON.stringify(list));
+    localStorage.setItem(storageKey(wallet, marketType), JSON.stringify(list));
   } catch {
     // Ignore quota / unavailable storage — the in-memory list still works.
   }

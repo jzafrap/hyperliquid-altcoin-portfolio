@@ -1,25 +1,28 @@
 import { useState } from "react";
 import type { Address } from "viem";
-import { useUsdcBalance } from "../hooks/useUsdcBalance";
+import { useAvailableFunds } from "../hooks/useAvailableFunds";
 import { executeBuy } from "../lib/execute";
 import { formatUsd } from "../lib/format";
-import type { Market } from "../lib/markets";
+import type { Market, MarketType } from "../lib/markets";
 import { minTotalFor, planBuy } from "../lib/orders";
 import type { Tokenset } from "../lib/tokensets";
 
 /**
  * Buy control for a saved tokenset (§6.3): equal-split market buy with the
  * minimum-total guard and a live split preview. Requires an approved agent.
+ * For perps, a buy opens 1x long positions.
  */
 export function BuyForm({
   tokenset,
   markets,
+  marketType,
   masterAddress,
   agentApproved,
   onBought,
 }: {
   tokenset: Tokenset;
   markets: Market[];
+  marketType: MarketType;
   masterAddress: Address;
   agentApproved: boolean;
   onBought: () => void;
@@ -28,7 +31,10 @@ export function BuyForm({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { data: availableUsdc, refetch: refetchBalance } = useUsdcBalance(masterAddress);
+  const { data: availableUsdc, refetch: refetchBalance } = useAvailableFunds(
+    masterAddress,
+    marketType,
+  );
 
   // Resolve the set's tokens to current markets, preserving basket order.
   const resolved = tokenset.tokens
@@ -59,6 +65,7 @@ export function BuyForm({
       const balance = fresh.isError ? undefined : fresh.data;
       const res = await executeBuy({
         masterAddress,
+        marketType,
         tokensetId: tokenset.id,
         tokensetName: tokenset.name,
         markets: resolved,
