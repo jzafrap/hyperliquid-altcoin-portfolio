@@ -12,13 +12,14 @@ per-token and per-lot P&L tracking.
 Testnet-ready, end to end. Implemented:
 
 - Environment switch (testnet-first) with a visible network banner
+- **Spot and perpetuals** (perps at 1x) via a market-type selector
 - Wallet connect (Rabby/MetaMask) — no keys stored
 - Agent (API) wallet signing: one approval, in-memory trade-only key
-- Tokenset CRUD, persisted per network + wallet
+- Tokenset CRUD, persisted per network + market type + wallet
 - Token picker with liquidity indicators (24h volume, spread, depth)
-- Equal-split market **buy** (min-total guard, IOC, lot recording)
-- Per-lot percentage **sell** (25/50/100%)
-- Live P&L dashboard (per token, per lot, per-tokenset aggregate)
+- Equal-split market **buy** (spot buy / perp open-long at 1x; min-total guard, IOC)
+- Per-lot percentage **sell** (25/50/100%; perp closes are reduceOnly)
+- Live P&L dashboard (per token, per lot, per-tokenset aggregate) + hide small balances
 - Edge-case guards: insufficient funds, price staleness, partial fills
 
 All money paths are covered by unit tests and were adversarially reviewed.

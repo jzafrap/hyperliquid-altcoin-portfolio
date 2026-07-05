@@ -92,11 +92,19 @@ BuyForm (amount)
 | Tokensets, lots | `localStorage` (per network+wallet) | `useTokensets` / `useLots` + `storage` event |
 | Agent session | module-scoped variable in `lib/agent.ts` | `useSyncExternalStore` (so all consumers stay in sync) |
 
+## Market type (spot | perp)
+
+A `MarketType` dimension runs through the whole app. `app/marketType.tsx` holds the
+active type (a React context); `MarketTypeTabs` switches it. It parameterizes the
+markets layer (asset id, price decimals, order side/reduceOnly), the funds source
+(spot USDC vs perp margin), and storage — so spot and perp tokensets/lots are fully
+isolated. Perps trade at 1x; see [Trading Model → Perps](./trading-model.md#perpetuals-1x).
+
 ## Persistence keys
 
 ```
-hl-tokensets:{network}:{wallet}:tokensets   # tokenset definitions
-hl-tokensets:{network}:{wallet}:lots        # buy lots
+hl-tokensets:{network}:{marketType}:{wallet}:tokensets   # tokenset definitions
+hl-tokensets:{network}:{marketType}:{wallet}:lots        # buy lots
 ```
 
 The agent private key is **never** persisted (memory only).

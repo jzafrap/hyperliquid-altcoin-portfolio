@@ -3,12 +3,29 @@
 How to use every feature of the app. For the math behind trades, see
 [Trading Model](./trading-model.md).
 
+## Spot vs Perps
+
+A selector at the top switches the whole view between **Spot** and **Perps (1x)**:
+
+- **Spot** — you buy and hold the actual tokens.
+- **Perps (1x)** — a "buy" opens a **1x long** position; a "sell" **closes** it
+  (reduceOnly). Margin comes from your Hyperliquid **perp** account, not spot USDC.
+
+Tokensets and positions are kept **separately per market type** — your spot
+tokensets and perp tokensets don't mix. Everything below works the same in both
+modes unless noted.
+
+> Perp caveats: positions **net** on the exchange (two buys of the same perp share
+> one real position), and displayed P&L is mark-vs-entry and **does not include
+> funding**. See [Trading Model → Perps](./trading-model.md#perpetuals-1x).
+
 ## The screen, top to bottom
 
 | Section | What it does |
 |---------|--------------|
 | Header | App title, network banner, wallet connect/disconnect. |
-| Spot USDC | Your Hyperliquid spot USDC balance (with a deposit link when it's 0). |
+| Spot/Perps selector | Switch market type. |
+| Balance | Spot USDC, or perp margin in perp mode (with a deposit link when 0). |
 | Enable trading | Approve the trade-only agent (one signature). |
 | Tokens / New tokenset | Compose and save a basket. |
 | Your tokensets | Saved baskets, each with a Buy control. |
