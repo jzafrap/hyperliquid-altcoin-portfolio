@@ -1,5 +1,5 @@
 import type { Address } from "viem";
-import { getAgentExchangeClient } from "./agent";
+import { getAgentExchangeClient, type TradingClient } from "./agent";
 import {
   addLot,
   anyLegFilled,
@@ -19,6 +19,7 @@ import {
   planBuy,
   type BuyMarketInput,
   type BuyPlan,
+  type OrderObject,
 } from "./orders";
 import {
   buildSellOrders,
@@ -29,6 +30,43 @@ import {
 
 /** Perps are always traded at 1x (committed scope for this iteration). */
 const PERP_LEVERAGE = 1;
+
+/** A leg that did not fill, with the reason to surface to the user. */
+export interface FailedLeg {
+  token: string;
+  error: string;
+}
+
+/**
+ * Recover per-order statuses from a thrown order error. The SDK throws
+ * ApiRequestError when ANY leg in a batch errors — even if others filled — but
+ * the raw response (with every leg's status) is attached. Returning it lets us
+ * record the legs that DID fill instead of losing them.
+ */
+function statusesFromOrderError(e: unknown): OrderStatus[] | null {
+  const statuses = (e as { response?: { data?: { statuses?: unknown } } })
+    ?.response?.data?.statuses;
+  return Array.isArray(statuses) ? (statuses as OrderStatus[]) : null;
+}
+
+/**
+ * Place a batch order and return per-leg statuses, treating a bulk-partial
+ * (some filled, some errored) as success by recovering statuses from the throw.
+ * Rethrows genuine failures (no recoverable statuses).
+ */
+async function placeOrders(
+  client: { order: TradingClient["order"] },
+  orders: OrderObject[],
+): Promise<OrderStatus[]> {
+  try {
+    const res = await client.order({ orders, grouping: "na" });
+    return (res.response?.data?.statuses ?? []) as OrderStatus[];
+  } catch (e) {
+    const recovered = statusesFromOrderError(e);
+    if (recovered) return recovered;
+    throw e;
+  }
+}
 
 export interface ExecuteBuyArgs {
   masterAddress: Address;
@@ -50,6 +88,8 @@ export interface ExecuteBuyResult {
   partial: boolean;
   /** False if the order filled but the lot could not be persisted (surface loudly). */
   persisted: boolean;
+  /** Legs that did not buy, with reasons — surfaced as a warning. */
+  failed: FailedLeg[];
 }
 
 /** Stable-ish unique id, resilient to environments without crypto.randomUUID. */
@@ -105,9 +145,8 @@ export async function executeBuy(args: ExecuteBuyArgs): Promise<ExecuteBuyResult
   }
 
   const orders = buildBuyOrders(plan);
-  const res = await client.order({ orders, grouping: "na" });
-
-  const statuses = (res.response?.data?.statuses ?? []) as OrderStatus[];
+  // Recovers filled legs even if the batch throws because some legs errored.
+  const statuses = await placeOrders(client, orders);
   const legs = buildLegsFromStatuses(plan, statuses);
 
   // Nothing filled → IOC canceled, no funds moved → safe to report failure.
@@ -117,8 +156,14 @@ export async function executeBuy(args: ExecuteBuyArgs): Promise<ExecuteBuyResult
   }
 
   // From here a real fill has occurred — do NOT throw; report via flags instead.
+  // Record ONLY the legs that actually bought; surface the rest as `failed`.
+  const filledLegs = legs.filter((l) => l.qtyBought > 0);
+  const failed: FailedLeg[] = legs
+    .filter((l) => l.qtyBought <= 0)
+    .map((l) => ({ token: l.token, error: l.error ?? "not filled" }));
+
   const record = makeBuyRecord(
-    { tokensetId, tokensetName, wallet: masterAddress, marketType, legs },
+    { tokensetId, tokensetName, wallet: masterAddress, marketType, legs: filledLegs },
     safeId(),
     Date.now(),
   );
@@ -130,12 +175,14 @@ export async function executeBuy(args: ExecuteBuyArgs): Promise<ExecuteBuyResult
     persisted = false;
   }
 
-  // Partial if any leg didn't fill or under-filled its planned size.
-  const partial = legs.some(
-    (l, i) => l.qtyBought <= 0 || l.qtyBought < plan.legs[i].size - 1e-12,
+  // Partial if any leg failed or a filled leg under-filled its planned size.
+  const planSizeByToken = new Map(plan.legs.map((l) => [l.tokenName, l.size]));
+  const underfilled = filledLegs.some(
+    (l) => l.qtyBought < (planSizeByToken.get(l.token) ?? 0) - 1e-12,
   );
+  const partial = failed.length > 0 || underfilled;
 
-  return { plan, record, partial, persisted };
+  return { plan, record, partial, persisted, failed };
 }
 
 export interface ExecuteSellArgs {
@@ -189,9 +236,9 @@ export async function executeSell(args: ExecuteSellArgs): Promise<ExecuteSellRes
   const client = getAgentExchangeClient(masterAddress);
   const sellableLegs = plan.legs.filter((l) => l.sellable);
   const orders = buildSellOrders(sellableLegs);
-  const res = await client.order({ orders, grouping: "na" });
+  // Recovers filled legs even if the batch throws because some legs errored.
+  const statuses = await placeOrders(client, orders);
 
-  const statuses = (res.response?.data?.statuses ?? []) as OrderStatus[];
   const fills: SellFill[] = sellableLegs.map((leg, i) => {
     const status = statuses[i];
     if (status && typeof status === "object" && "filled" in status) {

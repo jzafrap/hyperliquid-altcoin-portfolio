@@ -72,17 +72,21 @@ export function BuyForm({
         usdcTotal: usdc,
         availableUsdc: balance,
       });
+      const failedNote =
+        res.failed.length > 0
+          ? ` Couldn't buy ${res.failed.map((f) => f.token).join(", ")} (no fill).`
+          : "";
       if (!res.persisted) {
         // Order filled but the lot could not be saved — warn loudly, do NOT retry.
         setError(
           `Order FILLED (${formatUsd(res.record.usdcSpent)}) but could not be saved locally. ` +
-            `Record this position manually — do NOT buy again.`,
+            `Record this position manually — do NOT buy again.${failedNote}`,
         );
       } else {
         setMessage(
-          `Bought — spent ${formatUsd(res.record.usdcSpent)}${
-            res.partial ? " (partial basket — some legs did not fully fill)" : ""
-          }`,
+          `Bought ${res.record.legs.length} token${
+            res.record.legs.length > 1 ? "s" : ""
+          } — spent ${formatUsd(res.record.usdcSpent)}.${failedNote}`,
         );
       }
       setAmount("");

@@ -29,6 +29,23 @@ function mockOrder(statuses: unknown[]) {
   });
 }
 
+/** Simulate the SDK throwing ApiRequestError on a bulk-partial (some legs errored). */
+function mockOrderThrows(statuses: unknown[]) {
+  updateLeverageMock = vi.fn().mockResolvedValue({ status: "ok" });
+  const err = Object.assign(new Error("bulk partial"), {
+    response: { type: "order", data: { statuses } },
+  });
+  (getAgentExchangeClient as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+    order: vi.fn().mockRejectedValue(err),
+    updateLeverage: updateLeverageMock,
+  });
+}
+
+const twoMarkets: BuyMarketInput[] = [
+  { tokenName: "A", coin: "@1", assetId: 10001, szDecimals: 2, priceMaxDecimals: 6, midPx: 10 },
+  { tokenName: "B", coin: "@2", assetId: 10002, szDecimals: 2, priceMaxDecimals: 6, midPx: 10 },
+];
+
 describe("executeBuy", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -102,6 +119,30 @@ describe("executeBuy", () => {
       isCross: false, // isolated, since cross is not allowed
       leverage: 1,
     });
+  });
+
+  it("recovers filled legs when the batch throws on a partial (records only fills)", async () => {
+    // 2-token buy: A fills, B errors → SDK throws, but we keep A.
+    mockOrderThrows([
+      { filled: { totalSz: "1.96", avgPx: "10.1", oid: 1 } },
+      { error: "Order could not immediately match against any resting orders" },
+    ]);
+    const res = await executeBuy({
+      masterAddress: MASTER,
+      marketType: "spot",
+      tokensetId: "ts1",
+      tokensetName: "Set",
+      markets: twoMarkets,
+      usdcTotal: 40,
+    });
+    expect(res.record.legs).toHaveLength(1); // only the filled token
+    expect(res.record.legs[0].token).toBe("A");
+    expect(res.partial).toBe(true);
+    expect(res.persisted).toBe(true);
+    expect(res.failed).toEqual([
+      { token: "B", error: "Order could not immediately match against any resting orders" },
+    ]);
+    expect(loadLots(MASTER, "spot")).toHaveLength(1);
   });
 
   it("throws before recording when nothing fills (safe to retry)", async () => {
