@@ -13,6 +13,7 @@ import {
   type OrderStatus,
   type SellFill,
 } from "./lots";
+import type { MarketType } from "./markets";
 import {
   buildBuyOrders,
   planBuy,
@@ -26,15 +27,19 @@ import {
   type SellPlan,
 } from "./sell";
 
+/** Perps are always traded at 1x (committed scope for this iteration). */
+const PERP_LEVERAGE = 1;
+
 export interface ExecuteBuyArgs {
   masterAddress: Address;
+  marketType: MarketType;
   tokensetId: string;
   tokensetName: string;
   /** Resolved markets for the tokenset's tokens, in basket order. */
   markets: BuyMarketInput[];
   usdcTotal: number;
   slippage?: number;
-  /** Current available USDC — re-checked here so a stale UI can't overspend. */
+  /** Current available funds (spot USDC or perp margin) — re-checked here. */
   availableUsdc?: number;
 }
 
@@ -67,6 +72,7 @@ function safeId(): string {
 export async function executeBuy(args: ExecuteBuyArgs): Promise<ExecuteBuyResult> {
   const {
     masterAddress,
+    marketType,
     tokensetId,
     tokensetName,
     markets,
@@ -80,6 +86,16 @@ export async function executeBuy(args: ExecuteBuyArgs): Promise<ExecuteBuyResult
 
   // Trust boundary: verifies an approved agent is bound to this exact master.
   const client = getAgentExchangeClient(masterAddress);
+
+  // Perps: ensure each asset is set to 1x cross leverage before opening (this
+  // iteration only supports 1x). Idempotent; done before the order fills.
+  if (marketType === "perp") {
+    const assetIds = [...new Set(plan.legs.map((l) => l.assetId))];
+    for (const asset of assetIds) {
+      await client.updateLeverage({ asset, isCross: true, leverage: PERP_LEVERAGE });
+    }
+  }
+
   const orders = buildBuyOrders(plan);
   const res = await client.order({ orders, grouping: "na" });
 
@@ -94,14 +110,14 @@ export async function executeBuy(args: ExecuteBuyArgs): Promise<ExecuteBuyResult
 
   // From here a real fill has occurred — do NOT throw; report via flags instead.
   const record = makeBuyRecord(
-    { tokensetId, tokensetName, wallet: masterAddress, legs },
+    { tokensetId, tokensetName, wallet: masterAddress, marketType, legs },
     safeId(),
     Date.now(),
   );
 
   let persisted = true;
   try {
-    saveLots(masterAddress, addLot(loadLots(masterAddress), record));
+    saveLots(masterAddress, marketType, addLot(loadLots(masterAddress, marketType), record));
   } catch {
     persisted = false;
   }
@@ -116,6 +132,7 @@ export async function executeBuy(args: ExecuteBuyArgs): Promise<ExecuteBuyResult
 
 export interface ExecuteSellArgs {
   masterAddress: Address;
+  marketType: MarketType;
   lot: BuyRecord;
   /** Fraction of each leg's remaining quantity to sell (0 < pct ≤ 1). */
   pct: number;
@@ -146,7 +163,16 @@ export interface ExecuteSellResult {
  * correct). A cross-tab lock + re-read/merge is a planned follow-up (serverless v1).
  */
 export async function executeSell(args: ExecuteSellArgs): Promise<ExecuteSellResult> {
-  const { masterAddress, lot, pct, markets, slippage } = args;
+  const { masterAddress, marketType, lot, pct, markets, slippage } = args;
+
+  // Defense in depth: never sell a lot against the wrong market type (would use a
+  // wrong asset id / reduceOnly flag). Old lots without a recorded type are trusted
+  // to their storage namespace.
+  if (lot.marketType && lot.marketType !== marketType) {
+    throw new Error(
+      `Lot is a ${lot.marketType} position; cannot sell it on the ${marketType} market`,
+    );
+  }
 
   const marketByToken = new Map(markets.map((m) => [m.tokenName, m]));
   const plan = planSell(lot, pct, marketByToken, slippage);
@@ -180,7 +206,7 @@ export async function executeSell(args: ExecuteSellArgs): Promise<ExecuteSellRes
 
   let persisted = true;
   try {
-    saveLots(masterAddress, replaceLot(loadLots(masterAddress), updatedLot));
+    saveLots(masterAddress, marketType, replaceLot(loadLots(masterAddress, marketType), updatedLot));
   } catch {
     persisted = false;
   }

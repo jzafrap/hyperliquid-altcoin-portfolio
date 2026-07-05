@@ -24,10 +24,14 @@ import { makeExchangeClient } from "./hyperliquid";
 
 const AGENT_NAME = "tokensets";
 
-/** Trade-only surface of the ExchangeClient exposed for order flow (least privilege). */
+/**
+ * Trade-only surface of the ExchangeClient exposed for order flow (least privilege).
+ * Includes `updateLeverage` so perps can be set to 1x before opening — it is a
+ * risk setting, not a fund movement, so it stays within the trade-only boundary.
+ */
 export type TradingClient = Pick<
   ExchangeClient,
-  "order" | "cancel" | "cancelByCloid"
+  "order" | "cancel" | "cancelByCloid" | "updateLeverage"
 >;
 
 export interface AgentSession {

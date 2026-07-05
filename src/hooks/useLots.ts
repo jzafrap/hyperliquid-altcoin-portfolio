@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Address } from "viem";
 import { loadLots, type BuyRecord } from "../lib/lots";
+import type { MarketType } from "../lib/markets";
 
 /**
- * The connected wallet's buy lots, loaded from localStorage (network+wallet
- * scoped). Call `refresh()` after a buy/sell to re-read persisted state.
+ * The connected wallet's buy lots for a market type, from localStorage
+ * (network+market+wallet scoped). Call `refresh()` after a buy/sell.
  */
-export function useLots(wallet: Address | undefined) {
+export function useLots(wallet: Address | undefined, marketType: MarketType) {
   const [lots, setLots] = useState<BuyRecord[]>([]);
 
   const refresh = useCallback(() => {
-    setLots(wallet ? loadLots(wallet) : []);
-  }, [wallet]);
+    setLots(wallet ? loadLots(wallet, marketType) : []);
+  }, [wallet, marketType]);
 
   useEffect(() => {
     refresh();
