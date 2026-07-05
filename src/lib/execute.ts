@@ -40,12 +40,21 @@ export interface FailedLeg {
 /**
  * Recover per-order statuses from a thrown order error. The SDK throws
  * ApiRequestError when ANY leg in a batch errors — even if others filled — but
- * the raw response (with every leg's status) is attached. Returning it lets us
- * record the legs that DID fill instead of losing them.
+ * the raw response (with every leg's status) is attached to `error.response`.
+ *
+ * That raw response is the FULL exchange envelope
+ * `{ status: "ok", response: { type: "order", data: { statuses: [...] } } }`,
+ * so the statuses live at `error.response.response.data.statuses`. We also check
+ * the shallower path defensively in case the shape ever changes.
  */
 function statusesFromOrderError(e: unknown): OrderStatus[] | null {
-  const statuses = (e as { response?: { data?: { statuses?: unknown } } })
-    ?.response?.data?.statuses;
+  const resp = (e as { response?: unknown })?.response as
+    | {
+        data?: { statuses?: unknown };
+        response?: { data?: { statuses?: unknown } };
+      }
+    | undefined;
+  const statuses = resp?.response?.data?.statuses ?? resp?.data?.statuses;
   return Array.isArray(statuses) ? (statuses as OrderStatus[]) : null;
 }
 
