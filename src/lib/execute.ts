@@ -87,12 +87,20 @@ export async function executeBuy(args: ExecuteBuyArgs): Promise<ExecuteBuyResult
   // Trust boundary: verifies an approved agent is bound to this exact master.
   const client = getAgentExchangeClient(masterAddress);
 
-  // Perps: ensure each asset is set to 1x cross leverage before opening (this
-  // iteration only supports 1x). Idempotent; done before the order fills.
+  // Perps: ensure each asset is set to 1x leverage before opening (1x only this
+  // iteration). Cross by default, but isolated for assets that disallow cross
+  // ("Cross margin is not allowed for this asset"). Idempotent; before the fill.
   if (marketType === "perp") {
-    const assetIds = [...new Set(plan.legs.map((l) => l.assetId))];
-    for (const asset of assetIds) {
-      await client.updateLeverage({ asset, isCross: true, leverage: PERP_LEVERAGE });
+    const isolatedByAsset = new Map<number, boolean>();
+    for (const leg of plan.legs) {
+      isolatedByAsset.set(leg.assetId, leg.isolatedOnly === true);
+    }
+    for (const [asset, isolatedOnly] of isolatedByAsset) {
+      await client.updateLeverage({
+        asset,
+        isCross: !isolatedOnly,
+        leverage: PERP_LEVERAGE,
+      });
     }
   }
 

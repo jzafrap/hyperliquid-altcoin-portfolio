@@ -76,6 +76,34 @@ describe("executeBuy", () => {
     expect(loadLots(MASTER, "spot")).toHaveLength(0);
   });
 
+  it("uses isolated margin for assets that disallow cross", async () => {
+    mockOrder([{ filled: { totalSz: "10", avgPx: "1.5", oid: 1 } }]);
+    const perpMarkets: BuyMarketInput[] = [
+      {
+        tokenName: "OX",
+        coin: "OX",
+        assetId: 42,
+        szDecimals: 0,
+        priceMaxDecimals: 4,
+        midPx: 1.5,
+        isolatedOnly: true,
+      },
+    ];
+    await executeBuy({
+      masterAddress: MASTER,
+      marketType: "perp",
+      tokensetId: "ts1",
+      tokensetName: "Perps",
+      markets: perpMarkets,
+      usdcTotal: 15,
+    });
+    expect(updateLeverageMock).toHaveBeenCalledWith({
+      asset: 42,
+      isCross: false, // isolated, since cross is not allowed
+      leverage: 1,
+    });
+  });
+
   it("throws before recording when nothing fills (safe to retry)", async () => {
     mockOrder([{ error: "insufficient liquidity" }]);
     await expect(

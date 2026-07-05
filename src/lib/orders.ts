@@ -88,6 +88,8 @@ export interface BuyMarketInput {
   szDecimals: number;
   priceMaxDecimals: number;
   midPx: number | null;
+  /** Perp only: asset requires isolated margin (cross not allowed). */
+  isolatedOnly?: boolean;
 }
 
 export interface BuyLegPlan {
@@ -96,6 +98,8 @@ export interface BuyLegPlan {
   assetId: number;
   szDecimals: number;
   priceMaxDecimals: number;
+  /** Perp only: asset requires isolated margin (cross not allowed). */
+  isolatedOnly?: boolean;
   /** Intended USDC for this leg (usdcTotal / n). */
   allocationUsd: number;
   /** Reference mid at plan time. */
@@ -168,6 +172,7 @@ export function planBuy(
       assetId: m.assetId,
       szDecimals: m.szDecimals,
       priceMaxDecimals: m.priceMaxDecimals,
+      isolatedOnly: m.isolatedOnly,
       allocationUsd: perToken,
       mid,
       limitPrice,
