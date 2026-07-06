@@ -41,8 +41,9 @@ export async function getUsdcSpotBalance(user: Address): Promise<number> {
 }
 
 /**
- * Withdrawable USDC margin in the user's perp account. This is the spendable
- * amount for perp buys (opening 1x longs), separate from the spot USDC balance.
+ * Withdrawable USDC margin in the user's perp account (standard/manual account
+ * mode). In **unified account mode** this is "not meaningful" — the collateral
+ * lives in the spot clearinghouse state instead (see getAvailableFunds).
  */
 export async function getPerpWithdrawable(user: Address): Promise<number> {
   const state = await getInfoClient().clearinghouseState({ user });
@@ -50,14 +51,24 @@ export async function getPerpWithdrawable(user: Address): Promise<number> {
 }
 
 /**
- * Available funds for the given market: spot USDC balance for spot, perp account
- * withdrawable margin for perps. Used by the buy flow's insufficient-funds guard.
+ * Available funds for the given market (instructions.md §6.1).
+ *
+ * - Spot: the spot USDC balance.
+ * - Perp: Hyperliquid now defaults to **unified account mode**, where one USDC
+ *   balance collateralizes both spot and perps and shows up in the SPOT
+ *   clearinghouse state (the perp `withdrawable` is not meaningful). Standard/
+ *   manual accounts instead hold perp margin in `withdrawable`. We take the max of
+ *   both so buying power is correct in either mode. This is an advisory pre-check;
+ *   the exchange is the authoritative balance/margin check.
  */
-export function getAvailableFunds(
+export async function getAvailableFunds(
   user: Address,
   marketType: MarketType,
 ): Promise<number> {
-  return marketType === "perp"
-    ? getPerpWithdrawable(user)
-    : getUsdcSpotBalance(user);
+  if (marketType === "spot") return getUsdcSpotBalance(user);
+  const [perp, spot] = await Promise.all([
+    getPerpWithdrawable(user),
+    getUsdcSpotBalance(user),
+  ]);
+  return Math.max(perp, spot);
 }
