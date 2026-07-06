@@ -70,7 +70,7 @@ Perps reuse the spot flow with these differences:
 |--------|---------------|
 | Buy | Opens a **1x long**. Before ordering, leverage is set to **1x cross** per asset (`updateLeverage`); if that fails, the buy aborts before any order. |
 | Sell | Closes the long with **`reduceOnly`** orders — a "sell" can never flip into a short. |
-| Funds | Checked against the **perp account withdrawable** margin, not spot USDC. At 1x, notional ≈ margin. |
+| Funds | Hyperliquid defaults to **unified account mode**: one USDC balance collateralizes spot and perps (it shows in the *spot* clearinghouse state; the perp `withdrawable` is "not meaningful"). Buying power is taken as the max of perp `withdrawable` and spot USDC. No spot→perp transfer is needed. At 1x, notional ≈ margin. |
 | Storage | Perp tokensets/lots are namespaced separately from spot; a lot records its `marketType` and can't be sold on the wrong market. |
 
 **Caveats (see also `instructions.md` §8.2):**

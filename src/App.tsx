@@ -21,7 +21,7 @@ import type { NewTokenset } from "./lib/tokensets";
 function FundsBalance({ marketType }: { marketType: MarketType }) {
   const { address } = useAccount();
   const { data, isLoading, isError, error } = useAvailableFunds(address, marketType);
-  const label = marketType === "perp" ? "Perp margin (USDC)" : "Spot USDC";
+  const label = marketType === "perp" ? "Available USDC (perp)" : "Spot USDC";
 
   if (!address) return null;
   if (isLoading) return <p className="muted">Loading balance…</p>;
@@ -40,11 +40,12 @@ function FundsBalance({ marketType }: { marketType: MarketType }) {
       </div>
       {data !== undefined && data <= 0 && (
         <p className="muted small">
-          No {marketType === "perp" ? "perp margin" : "USDC"} available yet.{" "}
+          No USDC available yet.{" "}
           <a href={ENV.webAppUrl} target="_blank" rel="noreferrer">
-            {marketType === "perp" ? "Deposit / transfer to perps" : "Deposit"} on
-            Hyperliquid ({ENV.label}) →
+            Deposit on Hyperliquid ({ENV.label}) →
           </a>
+          {marketType === "perp" &&
+            " (unified accounts use one USDC balance for spot and perps — no transfer needed)"}
         </p>
       )}
     </div>
