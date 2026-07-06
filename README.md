@@ -39,7 +39,7 @@ Full docs live in **[`docs/`](./docs/README.md)**:
 | [Hyperliquid Reference](./docs/hyperliquid-reference.md) | Verified API facts and gotchas. |
 
 See [`instructions.md`](./instructions.md) for the original build spec and committed
-design decisions.
+design decisions, and [`CHANGELOG.md`](./CHANGELOG.md) for recent changes.
 
 ## Stack
 

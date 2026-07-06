@@ -68,7 +68,7 @@ Perps reuse the spot flow with these differences:
 
 | Aspect | Perp behavior |
 |--------|---------------|
-| Buy | Opens a **1x long**. Before ordering, leverage is set to **1x cross** per asset (`updateLeverage`); if that fails, the buy aborts before any order. |
+| Buy | Opens a **1x long**. Before ordering, leverage is set to **1x** per asset (`updateLeverage`) — **cross** normally, **isolated** for assets that disallow cross (`onlyIsolated`/`strictIsolated`); if that fails, the buy aborts before any order. |
 | Sell | Closes the long with **`reduceOnly`** orders — a "sell" can never flip into a short. |
 | Funds | Hyperliquid defaults to **unified account mode**: one USDC balance collateralizes spot and perps (it shows in the *spot* clearinghouse state; the perp `withdrawable` is "not meaningful"). Buying power is taken as the max of perp `withdrawable` and spot USDC. No spot→perp transfer is needed. At 1x, notional ≈ margin. |
 | Storage | Perp tokensets/lots are namespaced separately from spot; a lot records its `marketType` and can't be sold on the wrong market. |
@@ -97,11 +97,17 @@ by binary-float error (e.g. `0.58 × 100 = 57.999…` must stay `0.58`, not beco
 ## Partial fills — no atomicity
 
 Hyperliquid has **no atomic multi-order bundle**. A batch can fill some legs and not
-others. The app:
+others (e.g. an IOC leg that can't match a thin book). Importantly, the SDK
+**throws** on a batch where any leg errors — even if others filled — attaching the
+full per-leg statuses to the error. The app therefore:
 
-- records the legs that filled (with real fill price/size),
-- keeps failed legs in the record (marked), never dropping them,
-- flags the result as **partial** so you can see the basket is incomplete.
+- recovers the per-leg statuses from that thrown error (from
+  `error.response.response.data.statuses`) so real fills are never lost,
+- records **only the legs that actually filled**,
+- returns the legs that didn't as a `failed` list and surfaces a warning
+  ("Couldn't buy X"), and flags the result as **partial**.
+
+If **no** leg fills, the buy throws before recording (nothing moved — safe to retry).
 
 ## Lots and P&L bookkeeping
 
