@@ -119,6 +119,10 @@ export interface BuyPlan {
   plannedUsd: number;
   minTotal: number;
   slippage: number;
+  /** Perp leverage applied to this plan (1x-3x per asset maxLeverage); 1 for spot. */
+  leverage: number;
+  /** USDC margin actually required = usdcTotal / leverage. At 1x, equals usdcTotal. */
+  requiredMarginUsd: number;
   ok: boolean;
   errors: string[];
 }
@@ -128,16 +132,24 @@ export interface BuyPlan {
  * guard up front and re-checks each leg after size rounding — never skips a leg
  * (§6.3 committed policy). Legs are sized off the marketable limit price so fills
  * cannot overspend. A non-ok plan must not be executed.
+ *
+ * `usdcTotal` is NOTIONAL exposure (unchanged sizing math from pre-leverage
+ * behavior). `leverage` (default 1) only affects the funds guard: the USDC
+ * actually required is the margin, `usdcTotal / leverage` — at 1x this is
+ * numerically identical to `usdcTotal`, so 1x behavior is unchanged.
  */
 export function planBuy(
   markets: BuyMarketInput[],
   usdcTotal: number,
   slippage = DEFAULT_SLIPPAGE,
   availableUsdc?: number,
+  leverage = 1,
 ): BuyPlan {
   const n = markets.length;
   const minTotal = minTotalFor(n);
   const errors: string[] = [];
+  const requiredMarginUsd =
+    Number.isFinite(usdcTotal) && leverage > 0 ? usdcTotal / leverage : usdcTotal;
 
   if (n === 0) errors.push("Tokenset has no tokens");
   if (!Number.isFinite(usdcTotal) || !(usdcTotal > 0)) {
@@ -149,14 +161,16 @@ export function planBuy(
   }
 
   // Insufficient-funds guard (§7): checked at plan time and re-checked at execution.
+  // Validates required MARGIN (notional/leverage), not full notional — at 1x these
+  // are numerically identical, so this guard is byte-identical to pre-leverage behavior.
   if (
     availableUsdc !== undefined &&
     Number.isFinite(availableUsdc) &&
-    Number.isFinite(usdcTotal) &&
-    usdcTotal > availableUsdc + NOTIONAL_EPSILON
+    Number.isFinite(requiredMarginUsd) &&
+    requiredMarginUsd > availableUsdc + NOTIONAL_EPSILON
   ) {
     errors.push(
-      `Insufficient USDC: need ${usdcTotal}, have ${availableUsdc.toFixed(2)}`,
+      `Insufficient USDC: need ${requiredMarginUsd}, have ${availableUsdc.toFixed(2)}`,
     );
   }
 
@@ -203,6 +217,8 @@ export function planBuy(
     plannedUsd,
     minTotal,
     slippage,
+    leverage,
+    requiredMarginUsd,
     ok: errors.length === 0,
     errors,
   };
@@ -218,14 +234,28 @@ export interface OrderObject {
   t: { limit: { tif: "Ioc" } };
 }
 
-/** Build IOC buy orders from an OK plan using each leg's precomputed limit price. */
-export function buildBuyOrders(plan: BuyPlan): OrderObject[] {
+/**
+ * Build IOC orders that OPEN or INCREASE a position from an OK plan, using each
+ * leg's precomputed limit price. `side` selects the direction: "long" buys
+ * (`b:true`), "short" sells to open/increase a short (`b:false`). Neither is
+ * reduceOnly (`r:false`) — this is opening exposure, not closing it (closing
+ * uses `sell.ts`'s side-aware `buildSellOrders`, which IS reduceOnly for perps).
+ */
+export function buildOpenOrders(
+  plan: BuyPlan,
+  side: "long" | "short" = "long",
+): OrderObject[] {
   return plan.legs.map((leg) => ({
     a: leg.assetId,
-    b: true,
+    b: side === "long",
     p: toDecimalString(leg.limitPrice, leg.priceMaxDecimals),
     s: toDecimalString(leg.size, leg.szDecimals),
     r: false,
     t: { limit: { tif: "Ioc" } },
   }));
+}
+
+/** Back-compat alias: opens a long position. Equivalent to `buildOpenOrders(plan, "long")`. */
+export function buildBuyOrders(plan: BuyPlan): OrderObject[] {
+  return buildOpenOrders(plan, "long");
 }

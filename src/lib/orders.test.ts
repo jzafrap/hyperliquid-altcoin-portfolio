@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildBuyOrders,
+  buildOpenOrders,
   marketablePrice,
   minTotalFor,
   planBuy,
@@ -149,5 +150,68 @@ describe("buildBuyOrders", () => {
     expect(orders[0].p).toBe("10.2"); // mid*1.02, plain decimal string
     expect(orders[0].s).toBe("4.9"); // floor(50/10.2, 2dp)
     expect(orders[0].p).not.toMatch(/e/i); // never exponential
+  });
+});
+
+describe("buildOpenOrders", () => {
+  it("builds long-open orders (b=true, r=false) for side \"long\"", () => {
+    const plan = planBuy([market({ assetId: 10005, midPx: 10, szDecimals: 2 })], 50);
+    const orders = buildOpenOrders(plan, "long");
+    expect(orders).toHaveLength(1);
+    expect(orders[0].a).toBe(10005);
+    expect(orders[0].b).toBe(true);
+    expect(orders[0].r).toBe(false);
+  });
+
+  it("builds short-open orders (b=false, r=false) for side \"short\"", () => {
+    const plan = planBuy([market({ assetId: 10005, midPx: 10, szDecimals: 2 })], 50);
+    const orders = buildOpenOrders(plan, "short");
+    expect(orders).toHaveLength(1);
+    expect(orders[0].a).toBe(10005);
+    expect(orders[0].b).toBe(false);
+    expect(orders[0].r).toBe(false);
+  });
+
+  it("defaults to long when side is omitted (buildBuyOrders parity)", () => {
+    const plan = planBuy([market({ assetId: 10005, midPx: 10, szDecimals: 2 })], 50);
+    const orders = buildOpenOrders(plan);
+    expect(orders[0].b).toBe(true);
+  });
+});
+
+describe("planBuy — leverage & margin guard", () => {
+  it("computes required margin as notional/leverage and passes the guard exactly at that value (3x)", () => {
+    // 600 USDC notional @ 3x => 200 required margin; available exactly 200 => ok.
+    const plan = planBuy([market()], 600, undefined, 200, 3);
+    expect(plan.leverage).toBe(3);
+    expect(plan.requiredMarginUsd).toBeCloseTo(200);
+    expect(plan.errors.some((e) => /insufficient usdc/i.test(e))).toBe(false);
+  });
+
+  it("fails the guard just below the required margin (3x)", () => {
+    const plan = planBuy([market()], 600, undefined, 199, 3);
+    expect(plan.errors.some((e) => /insufficient usdc/i.test(e))).toBe(true);
+  });
+
+  it("halves the required margin at 2x", () => {
+    const plan = planBuy([market()], 200, undefined, 100, 2);
+    expect(plan.leverage).toBe(2);
+    expect(plan.requiredMarginUsd).toBeCloseTo(100);
+    expect(plan.errors.some((e) => /insufficient usdc/i.test(e))).toBe(false);
+  });
+
+  it("1x requires the full notional as margin — byte-identical to pre-leverage behavior", () => {
+    const plan = planBuy([market()], 50, undefined, 30); // leverage omitted -> defaults to 1
+    expect(plan.leverage).toBe(1);
+    expect(plan.requiredMarginUsd).toBe(50);
+    expect(plan.errors.some((e) => /insufficient usdc/i.test(e))).toBe(true); // need 50, have 30
+  });
+
+  it("1x explicit matches 1x default (regression: existing insufficient/allowed cases unchanged)", () => {
+    const rejected = planBuy([market()], 50, undefined, 30, 1);
+    expect(rejected.ok).toBe(false);
+    const allowed = planBuy([market()], 50, undefined, 100, 1);
+    expect(allowed.ok).toBe(true);
+    expect(allowed.requiredMarginUsd).toBe(50);
   });
 });
