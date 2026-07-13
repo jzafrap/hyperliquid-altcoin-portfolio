@@ -162,7 +162,7 @@ async function openPosition(
     leverage = 1,
   } = args;
 
-  const plan = planBuy(markets, usdcTotal, slippage, availableUsdc, leverage);
+  const plan = planBuy(markets, usdcTotal, slippage, availableUsdc, leverage, side);
   if (!plan.ok) throw new Error(plan.errors.join("; "));
 
   // Trust boundary: verifies an approved agent is bound to this exact master.

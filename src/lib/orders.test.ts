@@ -153,6 +153,51 @@ describe("buildBuyOrders", () => {
   });
 });
 
+describe("planBuy — side-aware limit price", () => {
+  it("prices below mid for a short-open plan (marketable sell direction)", () => {
+    const plan = planBuy(
+      [market({ midPx: 10, priceMaxDecimals: 6 })],
+      50,
+      undefined,
+      undefined,
+      1,
+      "short",
+    );
+    expect(plan.legs[0].limitPrice).toBeLessThan(10);
+    expect(plan.legs[0].limitPrice).toBeCloseTo(9.8); // mid*(1-0.02)
+  });
+
+  it("still prices above mid for a long-open plan (default side, unchanged)", () => {
+    const plan = planBuy([market({ midPx: 10, priceMaxDecimals: 6 })], 50);
+    expect(plan.legs[0].limitPrice).toBeGreaterThan(10);
+    expect(plan.legs[0].limitPrice).toBeCloseTo(10.2); // mid*(1+0.02)
+  });
+
+  it("explicit side \"long\" matches the default (regression parity)", () => {
+    const a = planBuy([market()], 50);
+    const b = planBuy([market()], 50, undefined, undefined, 1, "long");
+    expect(b.legs[0].limitPrice).toBe(a.legs[0].limitPrice);
+    expect(b.legs[0].size).toBe(a.legs[0].size);
+  });
+
+  it("produces a marketable price for opening a short via buildOpenOrders(plan, \"short\")", () => {
+    // Proves the fix end-to-end: a sell IOC (b:false) needs a limit price BELOW
+    // mid to be marketable. Before the fix, planBuy always priced in the buy
+    // direction (above mid) regardless of the side the plan would open.
+    const plan = planBuy(
+      [market({ midPx: 10, priceMaxDecimals: 6 })],
+      50,
+      undefined,
+      undefined,
+      1,
+      "short",
+    );
+    const orders = buildOpenOrders(plan, "short");
+    expect(orders[0].b).toBe(false);
+    expect(plan.legs[0].limitPrice).toBeLessThan(plan.legs[0].mid);
+  });
+});
+
 describe("buildOpenOrders", () => {
   it("builds long-open orders (b=true, r=false) for side \"long\"", () => {
     const plan = planBuy([market({ assetId: 10005, midPx: 10, szDecimals: 2 })], 50);

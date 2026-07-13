@@ -137,6 +137,15 @@ export interface BuyPlan {
  * behavior). `leverage` (default 1) only affects the funds guard: the USDC
  * actually required is the margin, `usdcTotal / leverage` — at 1x this is
  * numerically identical to `usdcTotal`, so 1x behavior is unchanged.
+ *
+ * `side` (default "long") selects the limit-price direction so the resulting
+ * plan is marketable for whichever `buildOpenOrders(plan, side)` order it will
+ * back: "long" prices above mid (a marketable buy), "short" prices below mid
+ * (a marketable sell-to-open). Mirrors the same side-aware pricing pattern used
+ * by `sell.ts`'s close path (`isBuyToClose` → `marketablePrice`). Sizing itself
+ * (`perToken / limitPrice`) is direction-agnostic — it always sizes off the
+ * worst-case limit price, so `maxNotionalUsd` never exceeds the allocation
+ * regardless of side.
  */
 export function planBuy(
   markets: BuyMarketInput[],
@@ -144,6 +153,7 @@ export function planBuy(
   slippage = DEFAULT_SLIPPAGE,
   availableUsdc?: number,
   leverage = 1,
+  side: "long" | "short" = "long",
 ): BuyPlan {
   const n = markets.length;
   const minTotal = minTotalFor(n);
@@ -174,10 +184,11 @@ export function planBuy(
     );
   }
 
+  const isBuy = side === "long";
   const perToken = n > 0 && Number.isFinite(usdcTotal) ? usdcTotal / n : 0;
   const legs: BuyLegPlan[] = markets.map((m) => {
     const mid = m.midPx ?? 0;
-    const limitPrice = marketablePrice(mid, true, m.priceMaxDecimals, slippage);
+    const limitPrice = marketablePrice(mid, isBuy, m.priceMaxDecimals, slippage);
     // Size off the LIMIT price (worst case) so the fill can't exceed allocation.
     const size = limitPrice > 0 ? roundSize(perToken / limitPrice, m.szDecimals) : 0;
     return {
