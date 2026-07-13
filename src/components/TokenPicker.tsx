@@ -49,6 +49,14 @@ export function TokenPicker({
       />
 
       <div className="token-list" role="list">
+        <div className="token-head" aria-hidden="true">
+          <span />
+          <span>Token</span>
+          <span className="th-num">Price</span>
+          <span className="th-num">24h</span>
+          <span className="th-num">Vol</span>
+          <span className="th-num">Liq</span>
+        </div>
         {shown.map((m) => {
           const isSelected = selected.has(m.tokenName);
           return (
