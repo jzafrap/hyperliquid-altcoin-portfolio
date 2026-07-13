@@ -410,6 +410,23 @@ button.ghost {
   gap: 0.35rem;
 }
 
+.leverage-selector {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.leverage-btn {
+  border: 1px solid var(--border);
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+.leverage-btn.active {
+  border-color: var(--accent, var(--text));
+  font-weight: 600;
+}
+
 .buy-row {
   display: flex;
   gap: 0.4rem;
