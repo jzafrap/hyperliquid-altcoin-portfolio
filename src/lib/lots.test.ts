@@ -134,6 +134,32 @@ describe("makeBuyRecord", () => {
       marketType: "spot",
     });
   });
+
+  it("defaults side to long when omitted", () => {
+    const legs = buildLegsFromStatuses(plan, [
+      { filled: { totalSz: "5", avgPx: "10", oid: 1 } },
+      { filled: { totalSz: "2.5", avgPx: "20", oid: 2 } },
+    ]);
+    const rec = makeBuyRecord(
+      { tokensetId: "ts1", tokensetName: "Set", wallet: "0xabc", marketType: "spot", legs },
+      "lot1",
+      123,
+    );
+    expect(rec.side).toBe("long");
+  });
+
+  it("preserves an explicit short side", () => {
+    const legs = buildLegsFromStatuses(plan, [
+      { filled: { totalSz: "5", avgPx: "10", oid: 1 } },
+      { filled: { totalSz: "2.5", avgPx: "20", oid: 2 } },
+    ]);
+    const rec = makeBuyRecord(
+      { tokensetId: "ts1", tokensetName: "Set", wallet: "0xabc", marketType: "perp", side: "short", legs },
+      "lot1",
+      123,
+    );
+    expect(rec.side).toBe("short");
+  });
 });
 
 describe("applySellFills", () => {
@@ -170,6 +196,31 @@ describe("applySellFills", () => {
     const legA = second.lot.legs.find((l) => l.token === "A")!;
     expect(legA.qtyRemaining).toBe(3);
     expect(legA.realizedPnlUsd).toBe(2 + 3); // 1*(12-10) + 1*(13-10)
+  });
+
+  it("keeps long realized P&L unchanged when side is unset (default long)", () => {
+    const { realizedPnlUsd } = applySellFills(lotFixture(), [
+      { token: "A", soldQty: 2.5, avgPx: 12 },
+    ]);
+    expect(realizedPnlUsd).toBe(5); // 2.5*(12-10)
+  });
+
+  it("realizes short P&L as profit when price drops below entry", () => {
+    const shortLot: BuyRecord = { ...lotFixture(), side: "short" };
+    const { lot, realizedPnlUsd } = applySellFills(shortLot, [
+      { token: "A", soldQty: 2.5, avgPx: 8 }, // entry 10, covered at 8 -> short profit
+    ]);
+    const legA = lot.legs.find((l) => l.token === "A")!;
+    expect(legA.realizedPnlUsd).toBe(5); // 2.5*(10-8)
+    expect(realizedPnlUsd).toBe(5);
+  });
+
+  it("realizes short P&L as loss when price rises above entry", () => {
+    const shortLot: BuyRecord = { ...lotFixture(), side: "short" };
+    const { realizedPnlUsd } = applySellFills(shortLot, [
+      { token: "A", soldQty: 2.5, avgPx: 12 }, // covered above entry -> short loses
+    ]);
+    expect(realizedPnlUsd).toBe(-5); // 2.5*(10-12)
   });
 });
 

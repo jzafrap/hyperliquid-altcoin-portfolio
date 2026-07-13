@@ -117,6 +117,66 @@ describe("isSmallPosition", () => {
   });
 });
 
+describe("side-aware unrealized P&L", () => {
+  it("keeps long unrealized P&L unchanged when side is explicitly long", () => {
+    const prices = new Map<string, number | null>([
+      ["A", 12], // +2/unit on 5 = +10
+      ["B", 20], // -5/unit on 2 = -10
+    ]);
+    const { legs, totals } = computeLotPnl(lot({ side: "long" }), prices);
+    expect(legs[0]).toMatchObject({ valueUsd: 60, pnlUsd: 10, pnlPct: 20 });
+    expect(legs[1]).toMatchObject({ valueUsd: 40, pnlUsd: -10, pnlPct: -20 });
+    expect(totals.pnlUsd).toBe(0);
+  });
+
+  it("profits a short lot when price falls", () => {
+    const shortLot = lot({
+      side: "short",
+      legs: [
+        { token: "A", assetId: 10001, usdcAllocated: 100, qtyBought: 10, avgEntryPrice: 10, qtyRemaining: 10 },
+      ],
+    });
+    const prices = new Map<string, number | null>([["A", 8]]); // price fell 10 -> 8
+    const { legs, totals } = computeLotPnl(shortLot, prices);
+    // cost 100, value 80; short P&L = cost - value = +20
+    expect(legs[0]).toMatchObject({ valueUsd: 80, pnlUsd: 20, pnlPct: 20 });
+    expect(totals.pnlUsd).toBe(20);
+  });
+
+  it("loses on a short lot when price rises", () => {
+    const shortLot = lot({
+      side: "short",
+      legs: [
+        { token: "A", assetId: 10001, usdcAllocated: 100, qtyBought: 10, avgEntryPrice: 10, qtyRemaining: 10 },
+      ],
+    });
+    const prices = new Map<string, number | null>([["A", 12]]); // price rose 10 -> 12
+    const { legs } = computeLotPnl(shortLot, prices);
+    expect(legs[0]).toMatchObject({ valueUsd: 120, pnlUsd: -20, pnlPct: -20 });
+  });
+
+  it("sums mixed long and short lots correctly via aggregateTotals", () => {
+    const longLot = lot({
+      id: "long1",
+      side: "long",
+      legs: [{ token: "A", assetId: 10001, usdcAllocated: 100, qtyBought: 10, avgEntryPrice: 10, qtyRemaining: 10 }],
+    });
+    const shortLot = lot({
+      id: "short1",
+      side: "short",
+      legs: [{ token: "B", assetId: 10002, usdcAllocated: 100, qtyBought: 10, avgEntryPrice: 10, qtyRemaining: 10 }],
+    });
+    const prices = new Map<string, number | null>([
+      ["A", 12], // long A: +2*10 = +20
+      ["B", 8], // short B: (10-8)*10 = +20
+    ]);
+    const longPnl = computeLotPnl(longLot, prices);
+    const shortPnl = computeLotPnl(shortLot, prices);
+    const agg = aggregateTotals([longPnl, shortPnl]);
+    expect(agg.pnlUsd).toBe(40);
+  });
+});
+
 describe("aggregateTotals", () => {
   it("combines totals across multiple lots", () => {
     const prices = new Map<string, number | null>([["A", 12], ["B", 20]]);

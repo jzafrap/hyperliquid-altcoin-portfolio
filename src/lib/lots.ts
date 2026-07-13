@@ -36,6 +36,11 @@ export interface BuyRecord {
   wallet: string;
   /** Market this lot was opened on. Optional for backward-compat with old lots. */
   marketType?: MarketType;
+  /**
+   * Position direction. Optional for backward-compat with lots persisted
+   * before directional shorts existed — those are treated as "long".
+   */
+  side?: "long" | "short";
   /** Actual USDC spent from fills (not the requested total — see §7 rounding). */
   usdcSpent: number;
   legs: BuyLeg[];
@@ -101,6 +106,8 @@ export interface NewLotInput {
   tokensetName: string;
   wallet: string;
   marketType: MarketType;
+  /** Position direction; defaults to "long" when omitted. */
+  side?: "long" | "short";
   legs: BuyLeg[];
 }
 
@@ -115,6 +122,7 @@ export function makeBuyRecord(
     tokensetName: input.tokensetName,
     wallet: input.wallet,
     marketType: input.marketType,
+    side: input.side ?? "long",
     usdcSpent: spentFromLegs(input.legs),
     legs: input.legs,
     status: "open",
@@ -176,21 +184,25 @@ export interface SellFill {
 
 /**
  * Apply sell fills to a lot: reduce each sold leg's qtyRemaining, accrue realized
- * P&L (soldQty × (sellPrice − avgEntryPrice)), and recompute lot status. Pure —
- * returns a new lot plus the realized P&L of this sell. Legs not in `fills` are
- * untouched (only the targeted lot's sold legs change).
+ * P&L (soldQty × (sellPrice − avgEntryPrice) × side direction), and recompute lot
+ * status. Pure — returns a new lot plus the realized P&L of this sell. Legs not in
+ * `fills` are untouched (only the targeted lot's sold legs change).
  */
 export function applySellFills(
   lot: BuyRecord,
   fills: SellFill[],
 ): { lot: BuyRecord; realizedPnlUsd: number } {
+  // Long profits as sell price rises above entry (dir=1); short profits as
+  // cover price falls below entry (dir=-1). Lots without `side` (persisted
+  // before directional shorts existed) default to long — behavior unchanged.
+  const dir = lot.side === "short" ? -1 : 1;
   const byToken = new Map(fills.map((f) => [f.token, f]));
   let realizedPnlUsd = 0;
 
   const legs = lot.legs.map((leg) => {
     const fill = byToken.get(leg.token);
     if (!fill || fill.soldQty <= 0) return leg;
-    const pnl = fill.soldQty * (fill.avgPx - leg.avgEntryPrice);
+    const pnl = dir * fill.soldQty * (fill.avgPx - leg.avgEntryPrice);
     realizedPnlUsd += pnl;
     return {
       ...leg,
