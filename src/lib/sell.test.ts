@@ -16,6 +16,13 @@ const lot: BuyRecord = {
   ],
 };
 
+/** Same lot but opened short — closing it must buy-to-cover, never plain-sell. */
+const shortLot: BuyRecord = {
+  ...lot,
+  id: "lot-short",
+  side: "short",
+};
+
 const spotM = (over: Partial<SellMarketInput>): SellMarketInput => ({
   tokenName: "A",
   coin: "@1",
@@ -107,5 +114,47 @@ describe("buildSellOrders", () => {
     const orders = buildSellOrders(plan.legs);
     expect(orders[0].a).toBe(3);
     expect(orders[0].r).toBe(true); // perp sell = reduceOnly
+  });
+});
+
+describe("planSell — side-aware close pricing", () => {
+  it("long-lot close still prices below mid (sell direction, rounds down) — unchanged", () => {
+    const plan = planSell(lot, 1, markets);
+    expect(plan.legs[0].side).toBe("long");
+    expect(plan.legs[0].limitPrice).toBeLessThan(12);
+  });
+
+  it("short-lot close prices ABOVE mid (buy-to-cover direction, rounds up)", () => {
+    const plan = planSell(shortLot, 1, markets);
+    expect(plan.legs[0].side).toBe("short");
+    expect(plan.legs[0].limitPrice).toBeGreaterThan(12);
+  });
+});
+
+describe("buildSellOrders — side-aware close (correctness fix)", () => {
+  const perpMarket: SellMarketInput = {
+    tokenName: "A",
+    coin: "A",
+    marketType: "perp",
+    assetId: 3,
+    szDecimals: 2,
+    priceMaxDecimals: 4,
+    midPx: 12,
+  };
+
+  it("long-lot close sells (b=false) — unchanged regression", () => {
+    const plan = planSell(lot, 1, new Map([["A", perpMarket]]));
+    const orders = buildSellOrders(plan.legs);
+    expect(orders[0].b).toBe(false);
+    expect(orders[0].r).toBe(true);
+  });
+
+  it("short-lot close BUYS to cover (b=true), and stays reduceOnly on perp", () => {
+    // This is the bug this phase fixes: closing a short via a plain sell (b=false)
+    // would GROW the short instead of covering it. A correct close must flip `b`.
+    const plan = planSell(shortLot, 1, new Map([["A", perpMarket]]));
+    const orders = buildSellOrders(plan.legs);
+    expect(orders[0].b).toBe(true); // buy-to-cover, NOT sell
+    expect(orders[0].r).toBe(true); // reduceOnly stays true both ways
   });
 });

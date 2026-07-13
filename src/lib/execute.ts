@@ -15,8 +15,9 @@ import {
 } from "./lots";
 import type { MarketType } from "./markets";
 import {
-  buildBuyOrders,
+  buildOpenOrders,
   planBuy,
+  type BuyLegPlan,
   type BuyMarketInput,
   type BuyPlan,
   type OrderObject,
@@ -27,9 +28,6 @@ import {
   type SellMarketInput,
   type SellPlan,
 } from "./sell";
-
-/** Perps are always traded at 1x (committed scope for this iteration). */
-const PERP_LEVERAGE = 1;
 
 /** A leg that did not fill, with the reason to surface to the user. */
 export interface FailedLeg {
@@ -88,6 +86,8 @@ export interface ExecuteBuyArgs {
   slippage?: number;
   /** Current available funds (spot USDC or perp margin) — re-checked here. */
   availableUsdc?: number;
+  /** Perp leverage (1x-3x, per asset maxLeverage); ignored for spot. Defaults to 1. */
+  leverage?: number;
 }
 
 export interface ExecuteBuyResult {
@@ -109,8 +109,36 @@ function safeId(): string {
 }
 
 /**
- * Execute an equal-split market buy for a tokenset (§6.3):
- * plan → guard → IOC orders signed by the agent → record the lot.
+ * Set per-asset perp leverage before opening a position, grouped by whether the
+ * asset disallows cross margin ("Cross margin is not allowed for this asset").
+ * Shared by `executeBuy` and `executeShort` — leverage is a risk setting keyed
+ * by asset, not by position direction, so both open paths group and set it the
+ * same way. Idempotent; always called before any fill.
+ */
+async function setPerpLeverage(
+  client: Pick<TradingClient, "updateLeverage">,
+  legs: Pick<BuyLegPlan, "assetId" | "isolatedOnly">[],
+  leverage: number,
+): Promise<void> {
+  const isolatedByAsset = new Map<number, boolean>();
+  for (const leg of legs) {
+    isolatedByAsset.set(leg.assetId, leg.isolatedOnly === true);
+  }
+  for (const [asset, isolatedOnly] of isolatedByAsset) {
+    await client.updateLeverage({
+      asset,
+      isCross: !isolatedOnly,
+      leverage,
+    });
+  }
+}
+
+/**
+ * Open or increase a position for a tokenset (§6.3, generalized to both
+ * directions): plan → guard → per-asset leverage → IOC orders signed by the
+ * agent → record the lot. Shared implementation for `executeBuy` (side="long")
+ * and `executeShort` (side="short") — same money-safety ordering, same
+ * leverage grouping, only the order side and recorded lot side differ.
  *
  * Ordering of failure modes matters for money safety:
  * - Invalid plan or no fill at all → throw BEFORE anything executes (safe to retry).
@@ -118,7 +146,10 @@ function safeId(): string {
  *   `persisted` flags so a real fill is never mistaken for "nothing happened"
  *   (which would invite a double-spend retry).
  */
-export async function executeBuy(args: ExecuteBuyArgs): Promise<ExecuteBuyResult> {
+async function openPosition(
+  args: ExecuteBuyArgs,
+  side: "long" | "short",
+): Promise<ExecuteBuyResult> {
   const {
     masterAddress,
     marketType,
@@ -128,32 +159,21 @@ export async function executeBuy(args: ExecuteBuyArgs): Promise<ExecuteBuyResult
     usdcTotal,
     slippage,
     availableUsdc,
+    leverage = 1,
   } = args;
 
-  const plan = planBuy(markets, usdcTotal, slippage, availableUsdc);
+  const plan = planBuy(markets, usdcTotal, slippage, availableUsdc, leverage, side);
   if (!plan.ok) throw new Error(plan.errors.join("; "));
 
   // Trust boundary: verifies an approved agent is bound to this exact master.
   const client = getAgentExchangeClient(masterAddress);
 
-  // Perps: ensure each asset is set to 1x leverage before opening (1x only this
-  // iteration). Cross by default, but isolated for assets that disallow cross
-  // ("Cross margin is not allowed for this asset"). Idempotent; before the fill.
+  // Perps: ensure each asset is set to the selected leverage before opening.
   if (marketType === "perp") {
-    const isolatedByAsset = new Map<number, boolean>();
-    for (const leg of plan.legs) {
-      isolatedByAsset.set(leg.assetId, leg.isolatedOnly === true);
-    }
-    for (const [asset, isolatedOnly] of isolatedByAsset) {
-      await client.updateLeverage({
-        asset,
-        isCross: !isolatedOnly,
-        leverage: PERP_LEVERAGE,
-      });
-    }
+    await setPerpLeverage(client, plan.legs, leverage);
   }
 
-  const orders = buildBuyOrders(plan);
+  const orders = buildOpenOrders(plan, side);
   // Recovers filled legs even if the batch throws because some legs errored.
   const statuses = await placeOrders(client, orders);
   const legs = buildLegsFromStatuses(plan, statuses);
@@ -161,7 +181,8 @@ export async function executeBuy(args: ExecuteBuyArgs): Promise<ExecuteBuyResult
   // Nothing filled → IOC canceled, no funds moved → safe to report failure.
   if (!anyLegFilled(legs)) {
     const firstError = legs.find((l) => l.error)?.error;
-    throw new Error(`Buy did not fill${firstError ? `: ${firstError}` : ""}`);
+    const verb = side === "long" ? "Buy" : "Short";
+    throw new Error(`${verb} did not fill${firstError ? `: ${firstError}` : ""}`);
   }
 
   // From here a real fill has occurred — do NOT throw; report via flags instead.
@@ -172,7 +193,7 @@ export async function executeBuy(args: ExecuteBuyArgs): Promise<ExecuteBuyResult
     .map((l) => ({ token: l.token, error: l.error ?? "not filled" }));
 
   const record = makeBuyRecord(
-    { tokensetId, tokensetName, wallet: masterAddress, marketType, legs: filledLegs },
+    { tokensetId, tokensetName, wallet: masterAddress, marketType, side, legs: filledLegs },
     safeId(),
     Date.now(),
   );
@@ -192,6 +213,16 @@ export async function executeBuy(args: ExecuteBuyArgs): Promise<ExecuteBuyResult
   const partial = failed.length > 0 || underfilled;
 
   return { plan, record, partial, persisted, failed };
+}
+
+/** Buy (open or increase a long) — see `openPosition`. */
+export async function executeBuy(args: ExecuteBuyArgs): Promise<ExecuteBuyResult> {
+  return openPosition(args, "long");
+}
+
+/** Short (open or increase a short) — mirrors `executeBuy`; see `openPosition`. */
+export async function executeShort(args: ExecuteBuyArgs): Promise<ExecuteBuyResult> {
+  return openPosition(args, "short");
 }
 
 export interface ExecuteSellArgs {

@@ -6,7 +6,7 @@ vi.mock("./agent", () => ({
 }));
 
 import { getAgentExchangeClient } from "./agent";
-import { executeBuy, executeSell } from "./execute";
+import { executeBuy, executeSell, executeShort } from "./execute";
 import { loadLots, saveLots, type BuyRecord } from "./lots";
 import type { BuyMarketInput } from "./orders";
 import type { SellMarketInput } from "./sell";
@@ -126,6 +126,59 @@ describe("executeBuy", () => {
     });
   });
 
+  it("sets 2x leverage per asset when leverage=2 is requested", async () => {
+    mockOrder([{ filled: { totalSz: "0.0098", avgPx: "60500", oid: 1 } }]);
+    const perpMarkets: BuyMarketInput[] = [
+      { tokenName: "BTC", coin: "BTC", assetId: 3, szDecimals: 5, priceMaxDecimals: 1, midPx: 60000 },
+    ];
+    const res = await executeBuy({
+      masterAddress: MASTER,
+      marketType: "perp",
+      tokensetId: "ts1",
+      tokensetName: "Perps",
+      markets: perpMarkets,
+      usdcTotal: 600,
+      availableUsdc: 300, // 600/2 = 300 required margin — exactly enough
+      leverage: 2,
+    });
+    expect(updateLeverageMock).toHaveBeenCalledWith({
+      asset: 3,
+      isCross: true,
+      leverage: 2,
+    });
+    expect(res.plan.leverage).toBe(2);
+    expect(res.plan.requiredMarginUsd).toBeCloseTo(300);
+  });
+
+  it("sets 3x leverage per asset, grouped by isolatedOnly, when leverage=3 is requested", async () => {
+    mockOrder([{ filled: { totalSz: "10", avgPx: "1.5", oid: 1 } }]);
+    const perpMarkets: BuyMarketInput[] = [
+      {
+        tokenName: "OX",
+        coin: "OX",
+        assetId: 42,
+        szDecimals: 0,
+        priceMaxDecimals: 4,
+        midPx: 1.5,
+        isolatedOnly: true,
+      },
+    ];
+    await executeBuy({
+      masterAddress: MASTER,
+      marketType: "perp",
+      tokensetId: "ts1",
+      tokensetName: "Perps",
+      markets: perpMarkets,
+      usdcTotal: 15,
+      leverage: 3,
+    });
+    expect(updateLeverageMock).toHaveBeenCalledWith({
+      asset: 42,
+      isCross: false,
+      leverage: 3,
+    });
+  });
+
   it("recovers filled legs when the batch throws on a partial (records only fills)", async () => {
     // 2-token buy: A fills, B errors → SDK throws, but we keep A.
     mockOrderThrows([
@@ -231,6 +284,95 @@ describe("executeBuy", () => {
     } finally {
       localStorage.setItem = original;
     }
+  });
+});
+
+describe("executeShort", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.clearAllMocks();
+  });
+
+  it("opens a short: builds sell-to-open orders (b=false, r=false) and records side:\"short\"", async () => {
+    mockOrder([{ filled: { totalSz: "0.0098", avgPx: "60500", oid: 1 } }]);
+    const perpMarkets: BuyMarketInput[] = [
+      { tokenName: "BTC", coin: "BTC", assetId: 3, szDecimals: 5, priceMaxDecimals: 1, midPx: 60000 },
+    ];
+    const orderMock = vi.fn().mockResolvedValue({
+      response: { data: { statuses: [{ filled: { totalSz: "0.0098", avgPx: "60500", oid: 1 } }] } },
+    });
+    updateLeverageMock = vi.fn().mockResolvedValue({ status: "ok" });
+    (getAgentExchangeClient as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      order: orderMock,
+      updateLeverage: updateLeverageMock,
+    });
+
+    const res = await executeShort({
+      masterAddress: MASTER,
+      marketType: "perp",
+      tokensetId: "ts1",
+      tokensetName: "Perps",
+      markets: perpMarkets,
+      usdcTotal: 600,
+      leverage: 1,
+    });
+
+    expect(orderMock).toHaveBeenCalledTimes(1);
+    const placedOrders = orderMock.mock.calls[0][0].orders;
+    expect(placedOrders[0].b).toBe(false); // sell to open a short
+    expect(placedOrders[0].r).toBe(false); // opening, not closing — never reduceOnly
+    expect(res.record.side).toBe("short");
+    expect(res.persisted).toBe(true);
+    expect(loadLots(MASTER, "perp")).toHaveLength(1);
+    expect(loadLots(MASTER, "perp")[0].side).toBe("short");
+  });
+
+  it("sets per-asset leverage before opening, grouped by isolatedOnly (mirrors executeBuy)", async () => {
+    mockOrder([
+      { filled: { totalSz: "0.0098", avgPx: "60500", oid: 1 } },
+      { filled: { totalSz: "10", avgPx: "1.5", oid: 2 } },
+    ]);
+    const perpMarkets: BuyMarketInput[] = [
+      { tokenName: "BTC", coin: "BTC", assetId: 3, szDecimals: 5, priceMaxDecimals: 1, midPx: 60000 },
+      {
+        tokenName: "OX",
+        coin: "OX",
+        assetId: 42,
+        szDecimals: 0,
+        priceMaxDecimals: 4,
+        midPx: 1.5,
+        isolatedOnly: true,
+      },
+    ];
+    await executeShort({
+      masterAddress: MASTER,
+      marketType: "perp",
+      tokensetId: "ts1",
+      tokensetName: "Perps",
+      markets: perpMarkets,
+      usdcTotal: 600,
+      leverage: 2,
+    });
+    expect(updateLeverageMock).toHaveBeenCalledWith({ asset: 3, isCross: true, leverage: 2 });
+    expect(updateLeverageMock).toHaveBeenCalledWith({ asset: 42, isCross: false, leverage: 2 });
+  });
+
+  it("throws before recording when nothing fills (safe to retry)", async () => {
+    mockOrder([{ error: "insufficient liquidity" }]);
+    const perpMarkets: BuyMarketInput[] = [
+      { tokenName: "BTC", coin: "BTC", assetId: 3, szDecimals: 5, priceMaxDecimals: 1, midPx: 60000 },
+    ];
+    await expect(
+      executeShort({
+        masterAddress: MASTER,
+        marketType: "perp",
+        tokensetId: "ts1",
+        tokensetName: "Perps",
+        markets: perpMarkets,
+        usdcTotal: 600,
+      }),
+    ).rejects.toThrow(/did not fill/i);
+    expect(loadLots(MASTER, "perp")).toHaveLength(0);
   });
 });
 
@@ -346,5 +488,56 @@ describe("executeSell", () => {
     expect(res.lot.status).toBe("closed");
     expect(res.lot.legs[0].qtyRemaining).toBe(0);
     expect(loadLots(MASTER, "spot")[0].status).toBe("closed");
+  });
+
+  it("never calls updateLeverage on the reduceOnly quick-close path", async () => {
+    const lot = seedLot();
+    mockOrder([{ filled: { totalSz: "2.5", avgPx: "12", oid: 9 } }]);
+    await executeSell({ masterAddress: MASTER, marketType: "spot", lot, pct: 0.5, markets: sellMarkets });
+    expect(updateLeverageMock).not.toHaveBeenCalled();
+  });
+
+  it("buys to cover (not sell) when quick-closing a short lot, and reports profit on a price drop", async () => {
+    const shortLot: BuyRecord = {
+      id: "lot-short",
+      tokensetId: "ts1",
+      tokensetName: "Set",
+      wallet: MASTER,
+      marketType: "perp",
+      side: "short",
+      usdcSpent: 50,
+      status: "open",
+      createdAt: 1,
+      legs: [
+        { token: "A", assetId: 3, usdcAllocated: 50, qtyBought: 5, avgEntryPrice: 10, qtyRemaining: 5 },
+      ],
+    };
+    saveLots(MASTER, "perp", [shortLot]);
+
+    const perpSellMarkets: SellMarketInput[] = [
+      { tokenName: "A", coin: "A", marketType: "perp", assetId: 3, szDecimals: 2, priceMaxDecimals: 4, midPx: 8 },
+    ];
+    const orderMock = vi.fn().mockResolvedValue({
+      response: { data: { statuses: [{ filled: { totalSz: "2.5", avgPx: "8", oid: 9 } }] } },
+    });
+    updateLeverageMock = vi.fn().mockResolvedValue({ status: "ok" });
+    (getAgentExchangeClient as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      order: orderMock,
+      updateLeverage: updateLeverageMock,
+    });
+
+    const res = await executeSell({
+      masterAddress: MASTER,
+      marketType: "perp",
+      lot: shortLot,
+      pct: 0.5,
+      markets: perpSellMarkets,
+    });
+
+    const placedOrders = orderMock.mock.calls[0][0].orders;
+    expect(placedOrders[0].b).toBe(true); // buy-to-cover, never a plain sell
+    expect(placedOrders[0].r).toBe(true); // still reduceOnly
+    expect(updateLeverageMock).not.toHaveBeenCalled(); // quick-close never sets leverage
+    expect(res.realizedPnlUsd).toBe(5); // short profits as price falls: 2.5 * (10 - 8)
   });
 });

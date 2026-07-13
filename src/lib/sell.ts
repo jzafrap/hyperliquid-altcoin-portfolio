@@ -11,7 +11,11 @@ import {
 /**
  * Sell-order math (instructions.md §6.4). A sell always targets ONE lot and a
  * percentage of each leg's remaining quantity; it never touches another lot.
- * For perps a "sell" closes the long, so orders are reduceOnly. Pure and
+ * For perps a "sell" CLOSES the lot's position, so orders are reduceOnly — but
+ * the order side depends on what is being closed: closing a long is a plain
+ * sell (`b:false`); closing a short is a buy-to-cover (`b:true`). A plain sell
+ * on a short lot would GROW the short instead of covering it, so this module is
+ * side-aware end to end (limit price direction AND order side). Pure and
  * side-effect free — execution lives in execute.ts.
  */
 
@@ -41,6 +45,12 @@ export interface SellLegPlan {
   limitPrice: number;
   /** Whether this leg can actually be sold now. */
   sellable: boolean;
+  /**
+   * Position direction being closed, from the lot. "short" closes via
+   * buy-to-cover (`b:true`); "long" closes via a plain sell (`b:false`,
+   * unchanged behavior).
+   */
+  side: "long" | "short";
   /** Why a leg is not sellable (no market / below min / rounds to zero). */
   reason?: string;
 }
@@ -72,6 +82,13 @@ export function planSell(
     errors.push("Sell percentage must be between 0 and 100");
   }
 
+  // Closing a short means buying to cover: the marketable price direction
+  // flips (above mid, rounded up, like a buy) and so does the eventual order
+  // side. Lots without `side` (persisted before directional shorts existed)
+  // default to "long" — identical to current behavior.
+  const side: "long" | "short" = lot.side === "short" ? "short" : "long";
+  const isBuyToClose = side === "short";
+
   const legs: SellLegPlan[] = lot.legs
     .filter((leg) => leg.qtyRemaining > DUST_EPSILON)
     .map((leg) => {
@@ -90,6 +107,7 @@ export function planSell(
         mid,
         limitPrice: 0,
         sellable: false,
+        side,
       };
 
       if (!market || mid <= 0) {
@@ -98,7 +116,7 @@ export function planSell(
 
       const validPct = Number.isFinite(pct) && pct > 0 && pct <= 1 ? pct : 0;
       const sellQty = roundSize(leg.qtyRemaining * validPct, szDecimals);
-      const limitPrice = marketablePrice(mid, false, market.priceMaxDecimals, slippage);
+      const limitPrice = marketablePrice(mid, isBuyToClose, market.priceMaxDecimals, slippage);
       if (sellQty <= 0) {
         return { ...base, sellQty, limitPrice, reason: "rounds to zero" };
       }
@@ -127,15 +145,18 @@ export function planSell(
 }
 
 /**
- * Build IOC sell orders from the sellable legs of a plan. Perp sells close a long
- * position, so they are `reduceOnly` (never flip into a short); spot sells are not.
+ * Build IOC close orders from the sellable legs of a plan. Perp closes are
+ * `reduceOnly` (never flip a long into a short or vice versa); spot sells are
+ * not. The order side (`b`) is side-aware: closing a long is a plain sell
+ * (`b:false`); closing a short is a buy-to-cover (`b:true`) — a plain sell on a
+ * short lot would GROW the short instead of closing it.
  */
 export function buildSellOrders(legs: SellLegPlan[]): OrderObject[] {
   return legs
     .filter((leg) => leg.sellable)
     .map((leg) => ({
       a: leg.assetId,
-      b: false,
+      b: leg.side === "short",
       p: toDecimalString(leg.limitPrice, leg.priceMaxDecimals),
       s: toDecimalString(leg.sellQty, leg.szDecimals),
       r: leg.marketType === "perp",
