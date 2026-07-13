@@ -52,35 +52,41 @@ never touches another lot, even for the same tokenset.
 |------|------|
 | Percentage | 25 / 50 / 100% of each leg's `qtyRemaining`. |
 | Size | `sellQty = floor(qtyRemaining × pct)` to `szDecimals`. |
-| Price | Marketable IOC **limit** = `mid × (1 − slippage)`, rounded **down**. |
+| Price | Marketable IOC **limit** = `mid × (1 − slippage)`, rounded **down** — for a **spot** sell or a **long-lot perp close**. Closing a **short** perp lot flips this: limit = `mid × (1 + slippage)`, rounded **up** (buying to cover). |
 | Minimum | A leg whose `sellQty × limitPrice` is below $10 is flagged unsellable (not dropped). |
-| Order | IOC order, each leg `b: false`. |
-| Update | Reduce `qtyRemaining`; recompute status; accrue realized P&L. |
+| Order | IOC order. `b: false` for a spot sell or a long-lot perp close; `b: true` for a short-lot perp close (buy-to-cover — a plain sell would have grown the short instead of closing it). |
+| Update | Reduce `qtyRemaining`; recompute status; accrue realized P&L (side-aware — see Perpetuals below). |
 
 Lot status after a sell:
 
 - `partially_sold` — some quantity remains.
 - `closed` — nothing remains across all legs.
 
-## Perpetuals (1x)
+## Perpetuals (leverage + directional short)
 
-Perps reuse the spot flow with these differences:
+Perps reuse the spot flow, generalized to both directions and selectable leverage:
 
 | Aspect | Perp behavior |
 |--------|---------------|
-| Buy | Opens a **1x long**. Before ordering, leverage is set to **1x** per asset (`updateLeverage`) — **cross** normally, **isolated** for assets that disallow cross (`onlyIsolated`/`strictIsolated`); if that fails, the buy aborts before any order. |
-| Sell | Closes the long with **`reduceOnly`** orders — a "sell" can never flip into a short. |
-| Funds | Hyperliquid defaults to **unified account mode**: one USDC balance collateralizes spot and perps (it shows in the *spot* clearinghouse state; the perp `withdrawable` is "not meaningful"). Buying power is taken as the max of perp `withdrawable` and spot USDC. No spot→perp transfer is needed. At 1x, notional ≈ margin. |
-| Storage | Perp tokensets/lots are namespaced separately from spot; a lot records its `marketType` and can't be sold on the wrong market. |
+| Buy | Opens or increases a **long**. The user picks 1x/2x/3x leverage (a shared `LeverageSelector`, gated to the resolved asset's `Market.maxLeverage` — options above the cap are hidden, never silently clamped or submitted). Before ordering, that leverage is set per asset (`updateLeverage`) — **cross** normally, **isolated** for assets that disallow cross (`onlyIsolated`/`strictIsolated`); if that fails, the buy aborts before any order. |
+| Short | A separate, tokenset/asset-scoped control (`ShortForm`, next to the buy control — not inside the per-lot sell control, since opening a short has no pre-existing lot) opens or increases a **short** via `executeShort`, mirroring the buy flow: same leverage selector, same per-asset `updateLeverage` step, same money-safety ordering. Produces non-`reduceOnly` sell-to-open orders. |
+| Close (quick-close) | The existing 25/50/100% quick-close remains `reduceOnly` and is side-aware: closing a **long** lot is a plain sell (unchanged); closing a **short** lot **buys to cover** (`b:true`, price rounded up) instead of growing the short — a plain sell on a short lot would have increased it. No leverage selector on close; `updateLeverage` is never called here. |
+| Sizing | The USDC amount is **notional exposure**, unchanged from pre-leverage sizing. Leverage only changes the funds guard: required margin = `notional / leverage`. At 1x this is numerically identical to the old behavior. |
+| Funds | Hyperliquid defaults to **unified account mode**: one USDC balance collateralizes spot and perps (it shows in the *spot* clearinghouse state; the perp `withdrawable` is "not meaningful"). Buying power is taken as the max of perp `withdrawable` and spot USDC. No spot→perp transfer is needed. |
+| Storage | Perp tokensets/lots are namespaced separately from spot; a lot records its `marketType` and `side` (`"long"` or `"short"`, defaulting to `"long"` for lots persisted before this existed) and can't be sold on the wrong market. |
 
 **Caveats (see also `instructions.md` §8.2):**
 
 - **Positions net on-exchange.** Hyperliquid keeps one netted position per perp
-  asset; multiple app "lots" are an accounting layer over that single position.
-- **Funding is not modeled.** P&L is mark-vs-entry; funding accrues on the real
-  position but isn't shown. The authoritative value is on Hyperliquid.
-- **No pre-trade reconciliation.** A buy doesn't check for an existing position on
-  that asset (opened elsewhere or from lost local storage).
+  asset; multiple app "lots" (long or short) are an accounting layer over that
+  single position. A directional sell sized larger than an existing long nets
+  the position to a short in one fill — no app-side flip logic is needed, the
+  exchange nets it.
+- **Funding is not modeled.** P&L is mark-vs-entry (side-aware: a short profits
+  as price falls); funding accrues on the real position but isn't shown. The
+  authoritative value is on Hyperliquid.
+- **No pre-trade reconciliation.** Opening a long or short doesn't check for an
+  existing position on that asset (opened elsewhere or from lost local storage).
 
 ## Price and size formatting
 
@@ -114,15 +120,20 @@ If **no** leg fills, the buy throws before recording (nothing moved — safe to 
 Hyperliquid does not know about "tokensets" — grouping and cost basis are entirely
 app-side.
 
-- Each buy is a **lot** (`BuyRecord`) with per-token legs: entry price, quantity
-  bought, quantity remaining, and accrued realized P&L.
-- **Unrealized P&L** (portfolio) = `qtyRemaining × (currentMid − avgEntryPrice)`,
-  per leg, aggregated to lot and tokenset. Legs without a current price are left
-  unvalued and excluded from totals — never guessed.
-- **Realized P&L** (on sell) = `soldQty × (sellPrice − avgEntryPrice)`, accrued per
-  leg.
+- Each buy or short-open is a **lot** (`BuyRecord`) with a `side` (`"long"` or
+  `"short"`, defaulting to `"long"` for lots persisted before shorts existed)
+  and per-token legs: entry price, quantity bought, quantity remaining, and
+  accrued realized P&L.
+- **Unrealized P&L** (portfolio) = `qtyRemaining × (currentMid − avgEntryPrice)`
+  for a long leg; **inverted** (`avgEntryPrice − currentMid`) for a short leg —
+  a short profits as price falls. Aggregated per leg, to lot and tokenset. Legs
+  without a current price are left unvalued and excluded from totals — never
+  guessed.
+- **Realized P&L** (on sell/cover) = `soldQty × (sellPrice − avgEntryPrice)` for
+  a long leg; inverted for a short leg (covering below entry is a profit).
+  Accrued per leg.
 
-## Money-safety guarantees (enforced in `executeBuy` / `executeSell`)
+## Money-safety guarantees (enforced in `executeBuy` / `executeShort` / `executeSell`)
 
 - Invalid plan or **nothing filled** → throw **before/without** moving funds (safe
   to retry; IOC that doesn't fill spends nothing).

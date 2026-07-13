@@ -3,7 +3,7 @@ import type { MarketType } from "../lib/markets";
 
 const TABS: { type: MarketType; label: string }[] = [
   { type: "spot", label: "Spot" },
-  { type: "perp", label: "Perps (1x)" },
+  { type: "perp", label: "Perps" },
 ];
 
 /** Segmented control to switch the whole view between spot and perp markets. */

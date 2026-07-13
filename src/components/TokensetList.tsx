@@ -2,10 +2,13 @@ import type { Address } from "viem";
 import type { Market, MarketType } from "../lib/markets";
 import type { Tokenset } from "../lib/tokensets";
 import { BuyForm } from "./BuyForm";
+import { ShortForm } from "./ShortForm";
 
 /**
- * List of the wallet's saved tokensets with a buy control per set (§6.3).
- * P&L and open lots are shown separately (§6.5).
+ * List of the wallet's saved tokensets with a buy control per set (§6.3). In
+ * perp mode, a directional short control is also mounted alongside the buy
+ * control — tokenset/asset-scoped, since opening a short has no pre-existing
+ * lot to attach to. P&L and open lots are shown separately (§6.5).
  */
 export function TokensetList({
   tokensets,
@@ -65,6 +68,16 @@ export function TokensetList({
               masterAddress={masterAddress}
               agentApproved={agentApproved}
               onBought={onBought}
+            />
+          )}
+          {masterAddress && marketType === "perp" && (
+            <ShortForm
+              tokenset={ts}
+              markets={markets}
+              marketType={marketType}
+              masterAddress={masterAddress}
+              agentApproved={agentApproved}
+              onShorted={onBought}
             />
           )}
         </li>

@@ -14,7 +14,10 @@ const PERCENTAGES: { label: string; pct: number }[] = [
 /**
  * Sell controls for a single lot (§6.4): sell 25/50/100% of each leg's remaining
  * quantity. Acts on this lot alone. Requires an approved agent. For perps this
- * closes the long via reduceOnly orders.
+ * closes the position via reduceOnly orders — a long lot closes with a plain
+ * sell, a short lot closes by buying to cover (see `sell.ts`'s side-aware
+ * `planSell`/`buildSellOrders`); the label reflects which is happening so a
+ * "Sell" action doesn't quietly submit a cover-buy under the hood.
  */
 export function SellForm({
   lot,
@@ -34,6 +37,10 @@ export function SellForm({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Lots persisted before directional shorts existed have no `side` field —
+  // treated as "long", matching sell.ts/lots.ts's own backward-compat default.
+  const closeLabel = lot.side === "short" ? "Cover" : "Sell";
 
   if (!agentApproved) {
     return <p className="muted small">Enable trading to sell.</p>;
@@ -70,7 +77,7 @@ export function SellForm({
   return (
     <div className="sell-form">
       <div className="sell-row">
-        <span className="muted small">Sell</span>
+        <span className="muted small">{closeLabel}</span>
         {PERCENTAGES.map(({ label, pct }) => (
           <button
             key={label}

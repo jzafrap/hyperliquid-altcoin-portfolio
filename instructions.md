@@ -298,26 +298,39 @@ lot and never touches another lot**, even if both belong to the same tokenset.
 
 ### 8.2 Perpetuals — model and caveats
 
-Perps mirror the spot model (create tokensets, buy = open **1x** long, sell % =
-`reduceOnly` close), with app-side lot bookkeeping. Because perps behave
-differently on-exchange, note:
+Perps mirror the spot model (create tokensets, app-side lot bookkeeping) but
+generalize it to both directions and selectable leverage:
 
+- **Buy** opens or increases a **long**, with user-selectable **1x/2x/3x
+  leverage** (gated per asset by `Market.maxLeverage` — options above the cap
+  are hidden in the UI, never silently clamped or submitted past the venue's
+  limit).
+- **Short** (a separate, tokenset/asset-scoped control next to Buy —
+  `executeShort`, not part of the per-lot sell control, since opening a short
+  has no pre-existing lot) opens or increases a **short**, mirroring the buy
+  flow with the same leverage selection and money-safety ordering.
+- **Quick-close** (25/50/100%, `executeSell`) stays `reduceOnly` and is
+  side-aware: closing a long lot is a plain sell (unchanged); closing a short
+  lot **buys to cover** instead of growing the short. No leverage selector on
+  close, and `updateLeverage` is never called on this path.
 - **Positions net on-exchange.** Hyperliquid keeps ONE netted position per perp
-  asset with a blended entry, so multiple app "lots" for the same asset are an
-  app-side accounting layer over a single real position. Closing a lot reduces the
-  shared position by that amount.
-- **Funding is not reflected in P&L.** P&L is mark-vs-entry; perp funding payments
-  accrue on the real position but are not modeled here. Treat displayed perp P&L as
-  an approximation; the authoritative value is on Hyperliquid.
-- **No pre-trade reconciliation.** A buy opens a long without checking existing
-  on-exchange positions for that asset (opened elsewhere, or from lost local
-  storage). If the account already holds that asset, the app's lot cost basis may
-  not match true net exposure. Planned hardening: read `clearinghouseState`
-  positions and warn/reconcile before opening.
-- **Leverage is forced to 1x** (cross) per asset before opening; if that call
-  fails the buy aborts before any order is placed. **Sells are `reduceOnly`** so a
-  close can never flip into a short. A lot records its `marketType` and cannot be
-  sold on the wrong market.
+  asset with a blended entry, so multiple app "lots" (long or short) for the
+  same asset are an app-side accounting layer over a single real position. A
+  directional short sized larger than an existing long nets the position to a
+  short in one fill — the exchange nets it, no app-side flip logic is needed.
+- **Funding is not reflected in P&L.** P&L is mark-vs-entry (side-aware: a
+  short profits as price falls); perp funding payments accrue on the real
+  position but are not modeled here. Treat displayed perp P&L as an
+  approximation; the authoritative value is on Hyperliquid.
+- **No pre-trade reconciliation.** Opening a long or short doesn't check
+  existing on-exchange positions for that asset (opened elsewhere, or from
+  lost local storage). If the account already holds that asset, the app's lot
+  cost basis may not match true net exposure. Planned hardening: read
+  `clearinghouseState` positions and warn/reconcile before opening.
+- **Leverage is set per asset before opening** (`updateLeverage`, cross
+  normally / isolated for assets that disallow cross); if that call fails the
+  open aborts before any order is placed. A lot records its `marketType` and
+  `side` and cannot be sold on the wrong market.
 - **Delisted perps** drop out of the market list, so a held position in a delisted
   asset can't be closed via this UI (Hyperliquid force-settles delistings).
 

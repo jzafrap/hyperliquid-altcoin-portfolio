@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Address } from "viem";
 import { useAvailableFunds } from "../hooks/useAvailableFunds";
-import { executeBuy } from "../lib/execute";
+import { executeShort } from "../lib/execute";
 import { formatUsd } from "../lib/format";
 import type { Market, MarketType } from "../lib/markets";
 import { minTotalFor, planBuy } from "../lib/orders";
@@ -9,25 +9,27 @@ import type { Tokenset } from "../lib/tokensets";
 import { LeverageSelector } from "./LeverageSelector";
 
 /**
- * Buy control for a saved tokenset (§6.3): equal-split market buy with the
- * minimum-total guard and a live split preview. Requires an approved agent.
- * For perps, opens or increases a long — leverage (1x-3x) is selectable, gated
- * by the resolved assets' `maxLeverage` (the tightest cap across the basket).
+ * Directional short control for a saved tokenset — the SELL-side mirror of
+ * `BuyForm`, tokenset/asset-scoped (not per-lot): opening a short has no
+ * pre-existing lot to attach to, unlike a close, so it lives here rather than
+ * inside the lot-scoped `SellForm`. Opens or increases a short via
+ * `executeShort`; leverage (1x-3x) is selectable, gated by the resolved
+ * assets' `maxLeverage`. Perp-only — callers should not mount this for spot.
  */
-export function BuyForm({
+export function ShortForm({
   tokenset,
   markets,
   marketType,
   masterAddress,
   agentApproved,
-  onBought,
+  onShorted,
 }: {
   tokenset: Tokenset;
   markets: Market[];
   marketType: MarketType;
   masterAddress: Address;
   agentApproved: boolean;
-  onBought: () => void;
+  onShorted: () => void;
 }) {
   const [amount, setAmount] = useState("");
   const [leverage, setLeverage] = useState(1);
@@ -39,46 +41,34 @@ export function BuyForm({
     marketType,
   );
 
-  // Resolve the set's tokens to current markets, preserving basket order.
   const resolved = tokenset.tokens
     .map((t) => markets.find((m) => m.tokenName === t))
     .filter((m): m is Market => m !== undefined);
   const missing = tokenset.tokens.length - resolved.length;
 
-  // Tightest cap across the resolved basket — never offer/submit above what
-  // every asset in the set actually allows. Spot has no leverage concept.
-  const maxLeverage =
-    marketType === "perp" && resolved.length > 0
-      ? Math.min(...resolved.map((m) => m.maxLeverage ?? 1))
-      : 1;
-  // Derived, not stored separately, so a market change that lowers the cap
-  // (e.g. swapping tokens) can never leave a stale higher selection in effect.
-  const effectiveLeverage = marketType === "perp" ? Math.min(leverage, maxLeverage) : 1;
+  const maxLeverage = resolved.length > 0 ? Math.min(...resolved.map((m) => m.maxLeverage ?? 1)) : 1;
+  const effectiveLeverage = Math.min(leverage, maxLeverage);
 
   const minTotal = minTotalFor(tokenset.tokens.length);
   const usdc = Number(amount);
   const plan =
     amount && resolved.length
-      ? planBuy(resolved, usdc, undefined, availableUsdc, effectiveLeverage)
+      ? planBuy(resolved, usdc, undefined, availableUsdc, effectiveLeverage, "short")
       : null;
 
   if (!agentApproved) {
-    return <p className="muted small">Enable trading above to buy this set.</p>;
+    return <p className="muted small">Enable trading above to short this set.</p>;
   }
 
-  const handleBuy = async () => {
-    if (busy) return; // reentrancy guard (defense beyond the disabled attribute)
+  const handleShort = async () => {
+    if (busy) return;
     setBusy(true);
     setError(null);
     setMessage(null);
     try {
-      // Best-effort balance re-read before executing. react-query's refetch keeps
-      // the last value on failure, so on a hard error we pass undefined (skip the
-      // client guard) rather than trust a stale figure — the exchange remains the
-      // authoritative balance check either way.
       const fresh = await refetchBalance();
       const balance = fresh.isError ? undefined : fresh.data;
-      const res = await executeBuy({
+      const res = await executeShort({
         masterAddress,
         marketType,
         tokensetId: tokenset.id,
@@ -90,23 +80,22 @@ export function BuyForm({
       });
       const failedNote =
         res.failed.length > 0
-          ? ` Couldn't buy ${res.failed.map((f) => f.token).join(", ")} (no fill).`
+          ? ` Couldn't short ${res.failed.map((f) => f.token).join(", ")} (no fill).`
           : "";
       if (!res.persisted) {
-        // Order filled but the lot could not be saved — warn loudly, do NOT retry.
         setError(
           `Order FILLED (${formatUsd(res.record.usdcSpent)}) but could not be saved locally. ` +
-            `Record this position manually — do NOT buy again.${failedNote}`,
+            `Record this position manually — do NOT short again.${failedNote}`,
         );
       } else {
         setMessage(
-          `Bought ${res.record.legs.length} token${
+          `Shorted ${res.record.legs.length} token${
             res.record.legs.length > 1 ? "s" : ""
-          } — spent ${formatUsd(res.record.usdcSpent)}.${failedNote}`,
+          } — notional ${formatUsd(res.record.usdcSpent)}.${failedNote}`,
         );
       }
       setAmount("");
-      onBought();
+      onShorted();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -114,22 +103,16 @@ export function BuyForm({
     }
   };
 
-  const canBuy = !busy && missing === 0 && plan?.ok === true;
+  const canShort = !busy && missing === 0 && plan?.ok === true;
 
   return (
-    <div className="buy-form">
+    <div className="short-form">
       {missing > 0 && (
         <p className="error small">
-          {missing} token{missing > 1 ? "s" : ""} in this set have no market — cannot buy.
+          {missing} token{missing > 1 ? "s" : ""} in this set have no market — cannot short.
         </p>
       )}
-      {marketType === "perp" && (
-        <LeverageSelector
-          maxLeverage={maxLeverage}
-          value={effectiveLeverage}
-          onChange={setLeverage}
-        />
-      )}
+      <LeverageSelector maxLeverage={maxLeverage} value={effectiveLeverage} onChange={setLeverage} />
       <div className="buy-row">
         <input
           type="number"
@@ -140,14 +123,12 @@ export function BuyForm({
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
         />
-        <button type="button" onClick={handleBuy} disabled={!canBuy}>
-          {busy ? "Buying…" : "Buy"}
+        <button type="button" className="short-btn" onClick={handleShort} disabled={!canShort}>
+          {busy ? "Shorting…" : "Short"}
         </button>
       </div>
 
-      {plan && !plan.ok && (
-        <p className="error small">{plan.errors[0]}</p>
-      )}
+      {plan && !plan.ok && <p className="error small">{plan.errors[0]}</p>}
       {plan?.ok && (
         <p className="muted small">
           ~{formatUsd(plan.legs[0].allocationUsd)} per token · planned{" "}
