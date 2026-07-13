@@ -119,11 +119,6 @@ function BtcChartSvg({ candles }: { candles: Candle[] }) {
           <span className="muted small">{formatTime(hovered.time)}</span>
         </div>
       )}
-
-      <span className="visually-hidden">
-        BTC is currently ${formatPrice(lastPrice)}, {directionWord} {Math.abs(pct).toFixed(2)}%
-        over the last 24 hours.
-      </span>
     </div>
   );
 }

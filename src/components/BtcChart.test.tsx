@@ -41,8 +41,10 @@ describe("BtcChart", () => {
     render(<BtcChart />);
 
     expect(document.querySelector(".btc-chart--up")).toBeInTheDocument();
-    expect(screen.getByRole("img")).toHaveAttribute("aria-label", expect.stringContaining("up"));
-    expect(screen.getByText(/up 10\.00% over the last 24 hours/i)).toBeInTheDocument();
+    expect(screen.getByRole("img")).toHaveAttribute(
+      "aria-label",
+      expect.stringMatching(/up 10\.00% over the last 24 hours/i),
+    );
   });
 
   it("renders a down-colored chart and accessible summary when price fell", () => {
@@ -56,9 +58,8 @@ describe("BtcChart", () => {
     expect(document.querySelector(".btc-chart--down")).toBeInTheDocument();
     expect(screen.getByRole("img")).toHaveAttribute(
       "aria-label",
-      expect.stringContaining("down"),
+      expect.stringMatching(/down 10\.00% over the last 24 hours/i),
     );
-    expect(screen.getByText(/down 10\.00% over the last 24 hours/i)).toBeInTheDocument();
   });
 
   it("renders nothing chart-wise when there are no candles yet", () => {
