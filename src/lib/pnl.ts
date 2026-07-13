@@ -41,11 +41,22 @@ function pct(pnlUsd: number, costUsd: number): number | null {
   return costUsd > DUST ? (pnlUsd / costUsd) * 100 : null;
 }
 
+/**
+ * P&L sign multiplier for a lot's side: long profits as value rises above
+ * cost (dir=1); short profits as value falls below cost (dir=-1). Lots
+ * without a `side` (persisted before directional shorts existed) default to
+ * long, matching current behavior exactly.
+ */
+function pnlDirection(lot: BuyRecord): 1 | -1 {
+  return lot.side === "short" ? -1 : 1;
+}
+
 /** Per-leg unrealized P&L for a lot's remaining holdings. */
 export function computeLegPnls(
   lot: BuyRecord,
   priceByToken: Map<string, number | null>,
 ): LegPnl[] {
+  const dir = pnlDirection(lot);
   return lot.legs
     .filter((leg) => leg.qtyRemaining > DUST)
     .map((leg) => {
@@ -53,7 +64,7 @@ export function computeLegPnls(
       const costUsd = leg.qtyRemaining * leg.avgEntryPrice;
       const valueUsd =
         currentPrice !== null ? leg.qtyRemaining * currentPrice : null;
-      const pnlUsd = valueUsd !== null ? valueUsd - costUsd : null;
+      const pnlUsd = valueUsd !== null ? dir * (valueUsd - costUsd) : null;
       return {
         token: leg.token,
         qtyRemaining: leg.qtyRemaining,
@@ -67,20 +78,27 @@ export function computeLegPnls(
     });
 }
 
-/** Aggregate totals over priced legs (unpriced legs are counted, not valued). */
+/**
+ * Aggregate totals over priced legs (unpriced legs are counted, not valued).
+ * `pnlUsd` sums each leg's already-signed `pnlUsd` (rather than
+ * `valueUsd - costUsd` on the aggregate) so mixed long+short baskets sum
+ * correctly — a long leg's gain and a short leg's gain both add, even though
+ * their `valueUsd` deltas point in opposite directions.
+ */
 export function totalsFromLegs(legs: LegPnl[]): PnlTotals {
   let costUsd = 0;
   let valueUsd = 0;
+  let pnlUsd = 0;
   let unpricedCount = 0;
   for (const leg of legs) {
-    if (leg.valueUsd === null) {
+    if (leg.valueUsd === null || leg.pnlUsd === null) {
       unpricedCount += 1;
       continue;
     }
     costUsd += leg.costUsd;
     valueUsd += leg.valueUsd;
+    pnlUsd += leg.pnlUsd;
   }
-  const pnlUsd = valueUsd - costUsd;
   return { costUsd, valueUsd, pnlUsd, pnlPct: pct(pnlUsd, costUsd), unpricedCount };
 }
 
