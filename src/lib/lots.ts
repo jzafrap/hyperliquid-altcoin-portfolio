@@ -184,9 +184,9 @@ export interface SellFill {
 
 /**
  * Apply sell fills to a lot: reduce each sold leg's qtyRemaining, accrue realized
- * P&L (soldQty × (sellPrice − avgEntryPrice)), and recompute lot status. Pure —
- * returns a new lot plus the realized P&L of this sell. Legs not in `fills` are
- * untouched (only the targeted lot's sold legs change).
+ * P&L (soldQty × (sellPrice − avgEntryPrice) × side direction), and recompute lot
+ * status. Pure — returns a new lot plus the realized P&L of this sell. Legs not in
+ * `fills` are untouched (only the targeted lot's sold legs change).
  */
 export function applySellFills(
   lot: BuyRecord,
