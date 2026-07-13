@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { useAccount } from "wagmi";
 import { useMarketType } from "./app/marketType";
 import { AgentApproval } from "./components/AgentApproval";
+import { BtcChart } from "./components/BtcChart";
 import { MarketTypeTabs } from "./components/MarketTypeTabs";
 import { NetworkBanner } from "./components/NetworkBanner";
 import { PortfolioDashboard } from "./components/PortfolioDashboard";
@@ -183,6 +184,8 @@ export default function App() {
                 onBought={refreshLots}
               />
             </section>
+
+            <BtcChart />
 
             <section className="panel">
               <h2>Portfolio</h2>
