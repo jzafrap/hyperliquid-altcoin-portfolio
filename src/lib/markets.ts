@@ -33,7 +33,7 @@ export interface Market {
   change24hPct: number | null;
   /** Volume-only tier for the list (cheap: no per-token order-book fetch). */
   volumeTier: LiquidityTier;
-  /** Perp only: maximum leverage the venue allows (we always trade 1x). */
+  /** Perp only: maximum leverage the venue allows for this asset (1x-3x, user-selectable). */
   maxLeverage?: number;
   /** Perp only: asset requires isolated margin (cross is not allowed). */
   isolatedOnly?: boolean;
