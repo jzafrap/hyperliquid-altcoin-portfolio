@@ -35,6 +35,8 @@ const plan: BuyPlan = {
   plannedUsd: 100,
   minTotal: 20,
   slippage: 0.02,
+  leverage: 1,
+  requiredMarginUsd: 100,
   ok: true,
   errors: [],
   legs: [
