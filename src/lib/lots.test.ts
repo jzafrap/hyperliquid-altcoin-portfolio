@@ -134,6 +134,32 @@ describe("makeBuyRecord", () => {
       marketType: "spot",
     });
   });
+
+  it("defaults side to long when omitted", () => {
+    const legs = buildLegsFromStatuses(plan, [
+      { filled: { totalSz: "5", avgPx: "10", oid: 1 } },
+      { filled: { totalSz: "2.5", avgPx: "20", oid: 2 } },
+    ]);
+    const rec = makeBuyRecord(
+      { tokensetId: "ts1", tokensetName: "Set", wallet: "0xabc", marketType: "spot", legs },
+      "lot1",
+      123,
+    );
+    expect(rec.side).toBe("long");
+  });
+
+  it("preserves an explicit short side", () => {
+    const legs = buildLegsFromStatuses(plan, [
+      { filled: { totalSz: "5", avgPx: "10", oid: 1 } },
+      { filled: { totalSz: "2.5", avgPx: "20", oid: 2 } },
+    ]);
+    const rec = makeBuyRecord(
+      { tokensetId: "ts1", tokensetName: "Set", wallet: "0xabc", marketType: "perp", side: "short", legs },
+      "lot1",
+      123,
+    );
+    expect(rec.side).toBe("short");
+  });
 });
 
 describe("applySellFills", () => {

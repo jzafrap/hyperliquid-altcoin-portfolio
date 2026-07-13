@@ -36,6 +36,11 @@ export interface BuyRecord {
   wallet: string;
   /** Market this lot was opened on. Optional for backward-compat with old lots. */
   marketType?: MarketType;
+  /**
+   * Position direction. Optional for backward-compat with lots persisted
+   * before directional shorts existed — those are treated as "long".
+   */
+  side?: "long" | "short";
   /** Actual USDC spent from fills (not the requested total — see §7 rounding). */
   usdcSpent: number;
   legs: BuyLeg[];
@@ -101,6 +106,8 @@ export interface NewLotInput {
   tokensetName: string;
   wallet: string;
   marketType: MarketType;
+  /** Position direction; defaults to "long" when omitted. */
+  side?: "long" | "short";
   legs: BuyLeg[];
 }
 
@@ -115,6 +122,7 @@ export function makeBuyRecord(
     tokensetName: input.tokensetName,
     wallet: input.wallet,
     marketType: input.marketType,
+    side: input.side ?? "long",
     usdcSpent: spentFromLegs(input.legs),
     legs: input.legs,
     status: "open",
