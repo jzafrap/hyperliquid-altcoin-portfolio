@@ -20,7 +20,7 @@ function rawCandle(overrides: Partial<Record<string, unknown>> = {}) {
     t: 1_000,
     T: 1_900_000,
     s: "BTC",
-    i: "15m",
+    i: "15m" as const,
     o: "100.5",
     c: "102.25",
     h: "103",
