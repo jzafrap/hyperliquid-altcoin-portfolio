@@ -5,19 +5,23 @@ How to use every feature of the app. For the math behind trades, see
 
 ## Spot vs Perps
 
-A selector at the top switches the whole view between **Spot** and **Perps (1x)**:
+A selector at the top switches the whole view between **Spot** and **Perps**:
 
 - **Spot** — you buy and hold the actual tokens.
-- **Perps (1x)** — a "buy" opens a **1x long** position; a "sell" **closes** it
-  (reduceOnly). Margin comes from your Hyperliquid **perp** account, not spot USDC.
+- **Perps** — a "Buy" opens or increases a **long**; a separate "Short" control
+  opens or increases a **short**. Both let you pick **1x/2x/3x leverage**
+  (capped per asset). The per-lot "Sell"/"Cover" quick-close (25/50/100%,
+  reduceOnly) closes a long lot with a sell or a short lot by buying to cover.
+  Margin comes from your Hyperliquid **perp** account, not spot USDC.
 
 Tokensets and positions are kept **separately per market type** — your spot
 tokensets and perp tokensets don't mix. Everything below works the same in both
 modes unless noted.
 
-> Perp caveats: positions **net** on the exchange (two buys of the same perp share
-> one real position), and displayed P&L is mark-vs-entry and **does not include
-> funding**. See [Trading Model → Perps](./trading-model.md#perpetuals-1x).
+> Perp caveats: positions **net** on the exchange (two opens of the same perp
+> share one real position), and displayed P&L is mark-vs-entry and **does not
+> include funding**. See
+> [Trading Model → Perpetuals](./trading-model.md#perpetuals-leverage--directional-short).
 
 ## The screen, top to bottom
 

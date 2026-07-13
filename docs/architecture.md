@@ -98,7 +98,8 @@ A `MarketType` dimension runs through the whole app. `app/marketType.tsx` holds 
 active type (a React context); `MarketTypeTabs` switches it. It parameterizes the
 markets layer (asset id, price decimals, order side/reduceOnly), the funds source
 (spot USDC vs perp margin), and storage — so spot and perp tokensets/lots are fully
-isolated. Perps trade at 1x; see [Trading Model → Perps](./trading-model.md#perpetuals-1x).
+isolated. Perps support selectable 1x-3x leverage and directional shorts; see
+[Trading Model → Perpetuals](./trading-model.md#perpetuals-leverage--directional-short).
 
 ## Persistence keys
 
