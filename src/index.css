@@ -447,6 +447,18 @@ button.ghost {
   padding: 0.4rem 0.9rem;
 }
 
+.short-form {
+  margin-top: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.short-btn {
+  padding: 0.4rem 0.9rem;
+  border-color: var(--danger);
+}
+
 /* Lots */
 .lots-list {
   list-style: none;
