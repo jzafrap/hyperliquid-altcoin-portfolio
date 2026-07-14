@@ -7,19 +7,25 @@ per-token and per-lot P&L tracking.
 > **Testnet-first.** The app defaults to Hyperliquid **testnet**. Switching to mainnet is
 > explicit (`VITE_HL_NETWORK=mainnet`) and shown by an always-visible network banner.
 
+![Perps tab: Buy and Short controls with 1x/2x/3x leverage selectors, and the BTC 24h chart above](./docs/screenshots/08-perps-tab.png)
+
 ## Status
 
 Testnet-ready, end to end. Implemented:
 
 - Environment switch (testnet-first) with a visible network banner
-- **Spot and perpetuals** (perps at 1x) via a market-type selector
+- **Spot and perpetuals**, with **1x/2x/3x leverage** and long or short, via a
+  market-type selector
 - Wallet connect (Rabby/MetaMask) — no keys stored
 - Agent (API) wallet signing: one approval, in-memory trade-only key
 - Tokenset CRUD, persisted per network + market type + wallet
 - Token picker with liquidity indicators (24h volume, spread, depth)
-- Equal-split market **buy** (spot buy / perp open-long at 1x; min-total guard, IOC)
-- Per-lot percentage **sell** (25/50/100%; perp closes are reduceOnly)
+- Equal-split market **buy/short** (spot buy / perp long or short at 1x-3x
+  leverage; min-total guard, IOC)
+- Per-lot percentage **sell/cover** (25/50/100%; reduceOnly, labeled by side) with
+  a colored leverage badge (`PERPS · BUY 2x` / `PERPS · SELL 3x`) per lot
 - Live P&L dashboard (per token, per lot, per-tokenset aggregate) + hide small balances
+- BTC 24h price chart for quick market context
 - Edge-case guards: insufficient funds, price staleness, partial fills
 
 All money paths are covered by unit tests and were adversarially reviewed.

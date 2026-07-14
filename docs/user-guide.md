@@ -41,6 +41,9 @@ A **tokenset** is a named basket of spot tokens. Creating one is local — no ch
 interaction, no signature.
 
 1. In **Tokens**, search by symbol (e.g. `HYPE`, `PURR`).
+
+   ![Searching for a token shows price, 24h change, volume, and a liquidity badge](./screenshots/01-token-search.png)
+
 2. Click tokens to add them. Each candidate shows:
    - **Liquidity badge** — High / Medium / Low from 24h volume (and spread for
      selected tokens). Low tokens carry a ⚠ warning.
@@ -49,11 +52,17 @@ interaction, no signature.
    so you can judge how much a trade will slip.
 4. Give the set a name and click **Create tokenset**.
 
+   ![Two tokens composed under "New tokenset" with live spread/depth and a name typed in](./screenshots/02-tokenset-composed.png)
+
 > Names must be unique per wallet. Tokens are de-duplicated automatically.
+
+![The newly created tokenset appears under "Your tokensets" with a Buy control](./screenshots/03-tokenset-created.png)
 
 ## Buy a tokenset
 
 On a saved set, enter a USDC amount and click **Buy**.
+
+![The Buy form on a saved tokenset with a USDC amount entered, showing planned per-token spend](./screenshots/04-spot-buy-form.png)
 
 - The amount is **split equally** across the set's tokens.
 - Minimum total is **`10 USDC × number of tokens`** (Hyperliquid's per-order
@@ -70,6 +79,12 @@ Possible outcomes:
 | `… (partial basket …)` | Some legs didn't fully fill. The filled part is recorded. |
 | `Insufficient USDC …` | Your balance is below the amount. |
 | `Order FILLED … but could not be saved …` | Rare: the trade happened but local storage failed. **Do not buy again** — record it manually. |
+
+![Confirmation message after a fill: "Bought 2 tokens — spent 97.54 US$"](./screenshots/05-spot-buy-result-message.png)
+
+The purchase becomes a lot in **Portfolio**, with live P&L per token:
+
+![The new lot in Portfolio, showing per-token entry price, current price, and live P&L](./screenshots/05-spot-buy-result-bundle.png)
 
 ## Read your portfolio
 
@@ -91,6 +106,8 @@ lots is shown next to the toggle.
 
 Each open lot has **Sell 25% / 50% / 100%** buttons.
 
+![An open lot with the Sell 25/50/100% controls](./screenshots/06-spot-sell.png)
+
 - The percentage applies to **each token's remaining quantity** in **that lot only**
   — other lots are untouched.
 - Sells are market (IOC) orders priced below mid.
@@ -98,6 +115,45 @@ Each open lot has **Sell 25% / 50% / 100%** buttons.
   P&L** for that sell is shown and accrued per token.
 - A leg that can't be sold right now (no market, or the slice is below the $10
   minimum) is flagged rather than silently skipped; the sell is marked partial.
+
+![After selling 50%: the lot shows status "partially_sold", reduced quantities, and realized P&L](./screenshots/07-spot-sell-result.png)
+
+## Perps: leverage, long and short
+
+Switch to the **Perps** tab to trade with leverage. Each tokenset gets two
+controls side by side — **Buy** (opens/increases a long) and **Short**
+(opens/increases a short) — each with its own **1x/2x/3x leverage selector**,
+capped to whatever the venue allows for that asset. The BTC · 24h panel above
+gives quick market context while you decide.
+
+![Perps tab: Buy and Short controls with leverage selectors, and the BTC 24h chart above](./screenshots/08-perps-tab.png)
+
+To open a leveraged long, pick a leverage (e.g. **2x**) and enter a USDC amount —
+the amount is the **notional** exposure, so the form shows the actual margin this
+will use:
+
+![Buy form in Perps mode with 2x leverage selected and planned sizing shown](./screenshots/09-perps-buy-leverage.png)
+
+The resulting lot carries a colored **`PERPS · BUY 2x`** badge, so you can tell
+at a glance what leverage and direction it was opened at — and the quick-close
+buttons read **Sell**, since this is a long:
+
+![Portfolio lot showing the "PERPS · BUY 2x" badge and Sell 25/50/100% controls](./screenshots/10-perps-buy-result.png)
+
+Opening a short works the same way, from the **Short** control:
+
+![Short form with 2x leverage selected and planned sizing shown](./screenshots/11-perps-short-leverage.png)
+
+A short lot carries the same badge in its down (red) color — **`PERPS · SELL 2x`**
+— and its quick-close buttons read **Cover** instead of Sell, since closing a
+short means buying it back:
+
+![Portfolio lot showing the "PERPS · SELL 2x" badge and Cover 25/50/100% controls](./screenshots/12-perps-short-result.png)
+
+> Leverage is recorded per lot at the moment it was opened — it's a historical
+> label, not a live value. See
+> [Trading Model → Perpetuals](./trading-model.md#perpetuals-leverage--directional-short)
+> for the margin math and netting behavior.
 
 ## Networks and safety
 
