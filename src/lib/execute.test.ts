@@ -148,6 +148,20 @@ describe("executeBuy", () => {
     });
     expect(res.plan.leverage).toBe(2);
     expect(res.plan.requiredMarginUsd).toBeCloseTo(300);
+    expect(res.record.leverage).toBe(2);
+  });
+
+  it("records leverage:1 on the lot when no leverage is requested (default)", async () => {
+    mockOrder([{ filled: { totalSz: "1.96", avgPx: "10.1", oid: 1 } }]);
+    const res = await executeBuy({
+      masterAddress: MASTER,
+      marketType: "spot",
+      tokensetId: "ts1",
+      tokensetName: "Set",
+      markets,
+      usdcTotal: 20,
+    });
+    expect(res.record.leverage).toBe(1);
   });
 
   it("sets 3x leverage per asset, grouped by isolatedOnly, when leverage=3 is requested", async () => {
@@ -355,6 +369,24 @@ describe("executeShort", () => {
     });
     expect(updateLeverageMock).toHaveBeenCalledWith({ asset: 3, isCross: true, leverage: 2 });
     expect(updateLeverageMock).toHaveBeenCalledWith({ asset: 42, isCross: false, leverage: 2 });
+  });
+
+  it("records the requested leverage on the recorded short lot", async () => {
+    mockOrder([{ filled: { totalSz: "0.0098", avgPx: "60500", oid: 1 } }]);
+    const perpMarkets: BuyMarketInput[] = [
+      { tokenName: "BTC", coin: "BTC", assetId: 3, szDecimals: 5, priceMaxDecimals: 1, midPx: 60000 },
+    ];
+    const res = await executeShort({
+      masterAddress: MASTER,
+      marketType: "perp",
+      tokensetId: "ts1",
+      tokensetName: "Perps",
+      markets: perpMarkets,
+      usdcTotal: 600,
+      leverage: 3,
+    });
+    expect(res.record.leverage).toBe(3);
+    expect(loadLots(MASTER, "perp")[0].leverage).toBe(3);
   });
 
   it("throws before recording when nothing fills (safe to retry)", async () => {

@@ -193,7 +193,7 @@ async function openPosition(
     .map((l) => ({ token: l.token, error: l.error ?? "not filled" }));
 
   const record = makeBuyRecord(
-    { tokensetId, tokensetName, wallet: masterAddress, marketType, side, legs: filledLegs },
+    { tokensetId, tokensetName, wallet: masterAddress, marketType, side, leverage, legs: filledLegs },
     safeId(),
     Date.now(),
   );

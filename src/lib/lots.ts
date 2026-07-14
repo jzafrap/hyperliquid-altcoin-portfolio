@@ -41,6 +41,12 @@ export interface BuyRecord {
    * before directional shorts existed — those are treated as "long".
    */
   side?: "long" | "short";
+  /**
+   * Perp leverage this position was opened at (1x-3x). Optional for
+   * backward-compat with lots persisted before this field existed and for
+   * spot lots (no leverage concept) — those are treated as 1x.
+   */
+  leverage?: number;
   /** Actual USDC spent from fills (not the requested total — see §7 rounding). */
   usdcSpent: number;
   legs: BuyLeg[];
@@ -108,6 +114,8 @@ export interface NewLotInput {
   marketType: MarketType;
   /** Position direction; defaults to "long" when omitted. */
   side?: "long" | "short";
+  /** Perp leverage this position was opened at; defaults to 1 when omitted. */
+  leverage?: number;
   legs: BuyLeg[];
 }
 
@@ -123,6 +131,7 @@ export function makeBuyRecord(
     wallet: input.wallet,
     marketType: input.marketType,
     side: input.side ?? "long",
+    leverage: input.leverage ?? 1,
     usdcSpent: spentFromLegs(input.legs),
     legs: input.legs,
     status: "open",

@@ -162,6 +162,32 @@ describe("makeBuyRecord", () => {
     );
     expect(rec.side).toBe("short");
   });
+
+  it("defaults leverage to 1 when omitted", () => {
+    const legs = buildLegsFromStatuses(plan, [
+      { filled: { totalSz: "5", avgPx: "10", oid: 1 } },
+      { filled: { totalSz: "2.5", avgPx: "20", oid: 2 } },
+    ]);
+    const rec = makeBuyRecord(
+      { tokensetId: "ts1", tokensetName: "Set", wallet: "0xabc", marketType: "perp", legs },
+      "lot1",
+      123,
+    );
+    expect(rec.leverage).toBe(1);
+  });
+
+  it("preserves an explicit leverage", () => {
+    const legs = buildLegsFromStatuses(plan, [
+      { filled: { totalSz: "5", avgPx: "10", oid: 1 } },
+      { filled: { totalSz: "2.5", avgPx: "20", oid: 2 } },
+    ]);
+    const rec = makeBuyRecord(
+      { tokensetId: "ts1", tokensetName: "Set", wallet: "0xabc", marketType: "perp", leverage: 3, legs },
+      "lot1",
+      123,
+    );
+    expect(rec.leverage).toBe(3);
+  });
 });
 
 describe("applySellFills", () => {
