@@ -28,6 +28,26 @@ function PnlFigure({ usd, pct }: { usd: number | null; pct: number | null }) {
   );
 }
 
+/**
+ * Identifies a perp lot's entry side and leverage at a glance (e.g.
+ * "PERPS · BUY 2x"), colored with the app's up/down semantics so executed
+ * long vs. short operations are easy to scan. Spot lots have no leverage
+ * concept, so no badge is rendered for them. `lot.leverage` is the leverage
+ * recorded when the position was opened (a historical value, not live);
+ * lots persisted before this field existed default to 1x.
+ */
+function LeverageBadge({ lot }: { lot: BuyRecord }) {
+  if (lot.marketType !== "perp") return null;
+  const isShort = lot.side === "short";
+  const verb = isShort ? "SELL" : "BUY";
+  const cls = isShort ? "down" : "up";
+  return (
+    <span className={`leverage-badge ${cls}`}>
+      PERPS · {verb} {lot.leverage ?? 1}x
+    </span>
+  );
+}
+
 function TotalsLine({ totals }: { totals: PnlTotals }) {
   return (
     <span className="pnl-totals">
@@ -155,6 +175,7 @@ export function PortfolioDashboard({
                   <span className="muted small">
                     {new Date(lot.createdAt).toLocaleDateString()} · {lot.status}
                   </span>
+                  <LeverageBadge lot={lot} />
                   <TotalsLine totals={totals} />
                 </div>
                 <table className="lot-legs">
