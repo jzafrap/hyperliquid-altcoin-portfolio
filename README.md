@@ -7,6 +7,17 @@ per-token and per-lot P&L tracking.
 > **Testnet-first.** The app defaults to Hyperliquid **testnet**. Switching to mainnet is
 > explicit (`VITE_HL_NETWORK=mainnet`) and shown by an always-visible network banner.
 
+## Live
+
+| | |
+|---|---|
+| 🧪 **Testnet** | **[jzafrap.github.io/hyperliquid-altcoin-portfolio/testnet/](https://jzafrap.github.io/hyperliquid-altcoin-portfolio/testnet/)** — practice with testnet funds, start here |
+| ⚠️ **Mainnet** | **[jzafrap.github.io/hyperliquid-altcoin-portfolio/mainnet/](https://jzafrap.github.io/hyperliquid-altcoin-portfolio/mainnet/)** — real funds, real trades |
+
+Both are static builds redeployed automatically on every push to `main` (see
+[`.github/workflows/deploy-pages.yml`](./.github/workflows/deploy-pages.yml)); no
+backend, no build-time secrets — your wallet's private key never leaves your wallet.
+
 ![Perps tab: Buy and Short controls with 1x/2x/3x leverage selectors, and the BTC 24h chart above](./docs/screenshots/08-perps-tab.png)
 
 ## Status
