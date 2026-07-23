@@ -3,6 +3,7 @@ import { useAccount } from "wagmi";
 import { useMarketType } from "./app/marketType";
 import { AgentApproval } from "./components/AgentApproval";
 import { BtcChart } from "./components/BtcChart";
+import { DataBackup } from "./components/DataBackup";
 import { MarketTypeTabs } from "./components/MarketTypeTabs";
 import { NetworkBanner } from "./components/NetworkBanner";
 import { PortfolioDashboard } from "./components/PortfolioDashboard";
@@ -150,6 +151,11 @@ export default function App() {
 
       <main className="app-main">
         <MarketTypeTabs />
+
+        <section className="panel">
+          <h2>Backup</h2>
+          <DataBackup />
+        </section>
 
         {isConnected ? (
           <>
